@@ -30,14 +30,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if text == "🚀 Start Work":
         context.user_data.clear()
+        # এখানে একাধিক টাস্ক ক্যাটাগরির বাটনগুলো তৈরি করা হয়েছে
         keyboard = [
-            [InlineKeyboardButton("📁 Facebook Cookies Task", callback_data="task_fb_cookies")],
+            [InlineKeyboardButton("📁 Create FB Account (Cookies Only)", callback_data="task_fb_cookies")],
             [InlineKeyboardButton("🔐 Facebook 2FA Task", callback_data="task_fb_2fa")],
-            [InlineKeyboardButton("📸 Instagram Task", callback_data="task_instagram")],
+            [InlineKeyboardButton("📸 Instagram Account Task", callback_data="task_instagram")],
             [InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_task")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("📌 Select a task category:", reply_markup=reply_markup)
+        await update.message.reply_text("📌 Select a task category below:", reply_markup=reply_markup)
         
     elif text == "💰 Balance":
         await update.message.reply_text("👤 Your Current Balance: $0.000\n✨ Complete tasks to earn more!")
@@ -53,9 +54,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['submitted_uid'] = text
             context.user_data['step'] = 'waiting_proof'
             
-            if "cookies" in task_type:
+            if "Cookies" in task_type:
                 await update.message.reply_text("✅ UID Saved.\n\n🍪 Now please paste the Facebook Cookies:")
-            elif "2fa" in task_type:
+            elif "2FA" in task_type:
                 await update.message.reply_text("✅ UID Saved.\n\n🔑 Now please send the 2FA Secret Key:")
             else:
                 await update.message.reply_text("✅ UID Saved.\n\n📌 Now please send your account link or proof:")
@@ -75,13 +76,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("💡 Please use the menu buttons below or type /start.")
 
-# ৩. ইনলাইন বাটন হ্যান্ডলার
+# ৩. ইনলাইন বাটন হ্যান্ডলার (ক্যাটাগরি হ্যান্ডেল করার জন্য)
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
     
-    if data.startswith("task__") or data in ["task_fb_cookies", "task_fb_2fa", "task_instagram"]:
+    if data in ["task_fb_cookies", "task_fb_2fa", "task_instagram"]:
         rand_name = f"User_{random.randint(1000, 9999)}"
         rand_pass = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
         
@@ -120,7 +121,7 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    print("Bot is running with multi-task support...")
+    print("Bot is running with multi-category task support...")
     application.run_polling()
 
 if __name__ == "__main__":
