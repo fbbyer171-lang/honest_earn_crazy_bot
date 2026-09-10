@@ -20,5 +20,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.run_polling()
 
-if name == 'main':
-    main()
+if _ _name_ _ == ' _ _main_ _' :
+  main( )
+
+   
