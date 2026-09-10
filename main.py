@@ -1,7 +1,6 @@
 import os
 import random
 import string
-from datetime import datetime, timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -12,7 +11,6 @@ from telegram.ext import (
     filters,
 )
 
-# Constants & Usernames
 FORCE_SUB_CHANNEL = "@honestcrazy11"
 HELP_ADMIN = "@timotyservice"
 SUPPORT_ADMIN = "@Owners_honestearnnow790"
@@ -25,18 +23,17 @@ def generate_random_credentials():
     password = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
     return name, password
 
-# Force Subscription Check
 async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id
     try:
         member = await context.bot.get_chat_member(chat_id=FORCE_SUB_CHANNEL, user_id=user_id)
         if member.status in ['member', 'administrator', 'creator']:
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Subscription Check Error: {e}")
+        return True 
     return False
 
-# 1. Start Command & Force Subscribe
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     
@@ -55,7 +52,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Language Selection Menu
     keyboard = [
         [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
          InlineKeyboardButton("🇧🇩 বাংলা", callback_data="lang_bn"),
@@ -67,7 +63,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# Callback Handler for Languages and Joins
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -93,7 +88,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lang = data.split("_")[1]
         context.user_data['lang'] = lang
         
-        # Main Menu based on Language
         if lang == "bn":
             menu = [
                 ["🚀 কাজ শুরু করুন", "💰 ব্যালেন্স"],
@@ -122,17 +116,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = ReplyKeyboardMarkup(menu, resize_keyboard=True)
         await query.message.reply_text(welcome_text, reply_markup=reply_markup)
 
-# Text Message Handler for Menus & Tasks
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     
-    # Check force sub for every action
     if not await check_subscription(update, context):
         await update.message.reply_text(f"⚠️ Please join {FORCE_SUB_CHANNEL} first using /start")
         return
 
     lang = context.user_data.get('lang', 'en')
 
+    # মেনু বাটনে চাপ দিলে সমস্ত পুরানো স্টেপ ক্লিয়ার করে ফ্রেশ করা হচ্ছে
     if text in ["🚀 Start Work", "🚀 কাজ শুরু করুন", "🚀 Manomboka"]:
         context.user_data.clear()
         context.user_data['lang'] = lang
@@ -148,9 +141,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
     elif text in ["💰 Balance", "💰 ব্যালেন্স", "💰 Vola"]:
+        context.user_data.clear()
         await update.message.reply_text("💰 **Current Balance:** $0.000\n✨ Complete tasks to earn more!")
         
     elif text in ["💸 Withdraw", "💸 পেমেন্ট তুলুন", "💸 Maka Vola"]:
+        context.user_data.clear()
         keyboard = [[InlineKeyboardButton("🟡 Binance (BEP20)", callback_data="withdraw_binance_bep20")]]
         await update.message.reply_text(
             "💳 **Withdrawal Section**\n\n• Minimum Withdraw: **$0.20**",
@@ -159,6 +154,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
     elif text in ["👥 Referrals", "👥 রেফারেল", "👥 Olona nasaina"]:
+        context.user_data.clear()
         user_id = update.effective_user.id
         ref_link = f"https://t.me/{context.bot.username}?start=ref_{user_id}"
         await update.message.reply_text(
@@ -168,9 +164,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
     elif text in ["🏆 Leaderboard", "🏆 লিডারবোর্ড", "🏆 Laharana"]:
+        context.user_data.clear()
         await update.message.reply_text("🏆 **Top Earners Leaderboard**\nNo data yet.")
         
     elif text in ["📊 Statistics", "📊 স্ট্যাটিস্টিক্স", "📊 Antontan'isa"]:
+        context.user_data.clear()
         await update.message.reply_text(
             "📊 **Your Work Statistics**\n\n"
             "📝 Total Submitted: 0\n"
@@ -181,16 +179,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
     elif text in ["🎧 Support", "🎧 সাপোর্ট", "🎧 Fanohanana"]:
+        context.user_data.clear()
         keyboard = [[InlineKeyboardButton("💻 Support Admin", url=f"https://t.me/{SUPPORT_ADMIN.replace('@', '')}")]]
         await update.message.reply_text(
-            f"🎧 **Customer Support**\nContact our admin: {SUPPORT_ADMIN}",
+            f"🎧 **Customer Support**\nContact our admin below:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
     elif text in ["📁 Help", "❓ হেল্প", "❓ Fanampiana"]:
+        context.user_data.clear()
         keyboard = [[InlineKeyboardButton("💻 Help Admin", url=f"https://t.me/{HELP_ADMIN.replace('@', '')}")]]
         await update.message.reply_text(
-            f"❓ **Help Center**\nNeed assistance? Contact: {HELP_ADMIN}",
+            f"❓ **Help Center**\nNeed assistance? Contact our admin below:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
@@ -219,8 +219,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif current_step == 'waiting_bep20_address':
             await update.message.reply_text(f"✅ Withdrawal Request Submitted with wallet: `{text}`", parse_mode="Markdown")
             context.user_data.clear()
+        else:
+            await update.message.reply_text("💡 Please use the menu buttons or type /start.")
 
-# Task Callbacks
 async def task_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -275,7 +276,7 @@ def main():
     application.add_handler(CallbackQueryHandler(task_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    print("Full Featured Web-Controlled Bot is running...")
+    print("Bot is running perfectly...")
     application.run_polling()
 
 if __name__ == "__main__":
