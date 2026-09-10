@@ -58,7 +58,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("🇲🇬 Malagasy", callback_data="lang_mg")]
     ]
     await update.message.reply_text(
-        "🌐 **Please select your language / Veuillez choisir votre langue :**",
+        "🌐 **Please select your language / ভাষা পরিবর্তন করুন / Ovay ny fiteny :**",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+# ভাষা পরিবর্তনের নতুন কমান্ড ফাংশন
+async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
+         InlineKeyboardButton("🇧🇩 বাংলা", callback_data="lang_bn"),
+         InlineKeyboardButton("🇲🇬 Malagasy", callback_data="lang_mg")]
+    ]
+    await update.message.reply_text(
+        "🌐 **Select your language / ভাষা পরিবর্তন করুন / Ovay ny fiteny :**",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
@@ -95,7 +108,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ["🏆 লিডারবোর্ড", "📊 স্ট্যাটিস্টিক্স"],
                 ["🎧 সাপোর্ট", "❓ হেল্প"]
             ]
-            welcome_text = "স্বাগতম! নিচের মেনু থেকে অপশন বেছে নিন:"
+            welcome_text = "স্বাগতম! নিচের মেনু থেকে অপশন বেছে নিন (ভাষা পরিবর্তন করতে /language লিখুন):"
         elif lang == "mg":
             menu = [
                 ["🚀 Manomboka", "💰 Vola"],
@@ -111,7 +124,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ["🏆 Leaderboard", "📊 Statistics"],
                 ["🎧 Support", "📁 Help"]
             ]
-            welcome_text = "Welcome! Choose an option below:"
+            welcome_text = "Welcome! Choose an option below (Type /language to change language anytime):"
 
         reply_markup = ReplyKeyboardMarkup(menu, resize_keyboard=True)
         await query.message.reply_text(welcome_text, reply_markup=reply_markup)
@@ -125,7 +138,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lang = context.user_data.get('lang', 'en')
 
-    # মেনু বাটনে চাপ দিলে সমস্ত পুরানো স্টেপ ক্লিয়ার করে ফ্রেশ করা হচ্ছে
     if text in ["🚀 Start Work", "🚀 কাজ শুরু করুন", "🚀 Manomboka"]:
         context.user_data.clear()
         context.user_data['lang'] = lang
@@ -220,7 +232,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ Withdrawal Request Submitted with wallet: `{text}`", parse_mode="Markdown")
             context.user_data.clear()
         else:
-            await update.message.reply_text("💡 Please use the menu buttons or type /start.")
+            await update.message.reply_text("💡 Please use the menu buttons, type /start, or /language to change language.")
 
 async def task_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -272,11 +284,13 @@ def main():
     application = Application.builder().token(TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("language", change_language))
+    application.add_handler(CommandHandler("lang", change_language))
     application.add_handler(CallbackQueryHandler(handle_callback, pattern="^(lang_|check_join)"))
     application.add_handler(CallbackQueryHandler(task_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    print("Bot is running perfectly...")
+    print("Bot is running perfectly with all features...")
     application.run_polling()
 
 if __name__ == "__main__":
