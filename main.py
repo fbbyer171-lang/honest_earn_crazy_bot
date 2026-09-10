@@ -43,7 +43,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("👤 Your Current Balance: $0.000\n✨ Complete tasks to earn more!")
         
     elif text == "💸 Withdraw":
-        await update.message.reply_text("💳 Minimum withdraw is $1.00.\nPlease select your payment method (bKash/Nagad).")
+        keyboard = [
+            [InlineKeyboardButton("🟡 Binance (BEP20)", callback_data="withdraw_binance_bep20")],
+            [InlineKeyboardButton("🇧🇩 bKash / Nagad", callback_data="withdraw_bka_nag")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            "💳 **Withdrawal Section**\n\n"
+            "• Minimum Withdraw: **$0.20** (20 Cents)\n"
+            "• Select your preferred payout method below:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
         
     elif text == "👥 Referrals":
         user_id = update.effective_user.id
@@ -81,10 +92,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text("❌ Invalid proof! Try again.")
             context.user_data.clear()
+            
+        elif current_step == 'waiting_bep20_address':
+            wallet_addr = text
+            await update.message.reply_text(
+                f"✅ **Withdrawal Request Submitted!**\n\n"
+                f"Network: Binance (BEP20)\n"
+                f"Wallet: `{wallet_addr}`\n\n"
+                f"⏳ Your payment will be processed within 24 hours.",
+                parse_mode="Markdown"
+            )
+            context.user_data.clear()
+            
         else:
             await update.message.reply_text("💡 Please use the menu buttons or type /start.")
 
-# ৩. ইনলাইন বাটন হ্যান্ডলার (সংশোধিত ও নিরাপদ)
+# ৩. ইনলাইন বাটন হ্যান্ডলার
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -111,13 +134,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👇 **এখন আপনার অ্যাকাউন্টের UID চ্যাটে লিখে পাঠান:**"
         )
         keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]]
-        
-        # পুরনো মেসেজ এডিট না করে নতুন মেসেজ পাঠানোর ব্যবস্থা করা হলো যাতে আটকে না যায়
         await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        
+    elif data == "withdraw_binance_bep20":
+        context.user_data['step'] = 'waiting_bep20_address'
+        await query.message.reply_text(
+            "🟡 **Binance (BEP20) Withdrawal**\n\n"
+            "আপনার **Binance USDT (BEP20)** ওয়ালেট অ্যাড্রেসটি চ্যাটে লিখে পাঠান:"
+        )
+        
+    elif data == "withdraw_bka_nag":
+        await query.message.reply_text("🇧🇩 bKash / Nagad withdrawal is coming soon. Please use Binance BEP20 for now.")
         
     elif data == "cancel_task":
         context.user_data.clear()
-        await query.message.reply_text("❌ Task cancelled. Type /start to go back.")
+        await query.message.reply_text("❌ Process cancelled. Type /start to go back.")
 
 def main():
     TOKEN = "8980706201:AAHmK_q9vcStJiTbd-m1HGaDjbYhga3pfps"
@@ -127,7 +158,7 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    print("Bot is running smoothly...")
+    print("Bot is running with Binance BEP20 support...")
     application.run_polling()
 
 if __name__ == "__main__":
