@@ -10,36 +10,8 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 
-# --- [GOOGLE SHEETS SAFE SETUP] ---
-client = None
-try:
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-    client = gspread.authorize(creds)
-    SPREADSHEET_NAME = "Daily Earn Bot Database"
-except Exception as e:
-    print(f"Warning: Google Sheets not connected ({e}). Bot will run without sheets.")
-
-def save_to_sheet(task_category, data_row):
-    if not client:
-        return
-    try:
-        spreadsheet = client.open(SPREADSHEET_NAME)
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        sheet_title = f"{task_category}_{today_date}"
-        try:
-            worksheet = spreadsheet.worksheet(sheet_title)
-        except gspread.exceptions.WorksheetNotFound:
-            worksheet = spreadsheet.add_worksheet(title=sheet_title, rows="1000", cols="10")
-            worksheet.append_row(["Timestamp", "Telegram ID", "Username", "Submitted Data", "Status"])
-        worksheet.append_row(data_row)
-    except Exception as e:
-        print(f"Sheet Save Error: {e}")
-
-# ১. স্টার্ট কমান্ড
+# ১. স্টার্ট কমান্ড ও মেইন মেনু
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     keyboard = [
@@ -59,7 +31,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "🚀 Start Work":
         context.user_data.clear()
         keyboard = [
-            [InlineKeyboardButton("📁 Create FB Account (Cookies Only)", callback_data="fb_cookies_task")],
+            [InlineKeyboardButton("📁 Facebook Cookies Task", callback_data="task_fb_cookies")],
+            [InlineKeyboardButton("🔐 Facebook 2FA Task", callback_data="task_fb_2fa")],
+            [InlineKeyboardButton("📸 Instagram Task", callback_data="task_instagram")],
             [InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_task")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -72,31 +46,30 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("💳 Minimum withdraw is $1.00.\nPlease select your payment method (bKash/Nagad).")
         
     else:
-        # টাস্কের ভেতরে UID বা Cookies ইনপুট নেওয়া
         current_step = context.user_data.get('step')
+        task_type = context.user_data.get('task_type', 'Task')
         
         if current_step == 'waiting_uid':
             context.user_data['submitted_uid'] = text
-            context.user_data['step'] = 'waiting_cookies'
-            await update.message.reply_text("✅ UID Saved.\n\n🍪 Now please paste the Facebook Cookies:")
+            context.user_data['step'] = 'waiting_proof'
             
-        elif current_step == 'waiting_cookies':
-            cookies_data = text
-            telegram_id = update.effective_user.id
-            username = update.effective_user.username or "No Username"
+            if "cookies" in task_type:
+                await update.message.reply_text("✅ UID Saved.\n\n🍪 Now please paste the Facebook Cookies:")
+            elif "2fa" in task_type:
+                await update.message.reply_text("✅ UID Saved.\n\n🔑 Now please send the 2FA Secret Key:")
+            else:
+                await update.message.reply_text("✅ UID Saved.\n\n📌 Now please send your account link or proof:")
+            
+        elif current_step == 'waiting_proof':
+            proof_data = text
             user_uid = context.user_data.get('submitted_uid', 'N/A')
             
-            await update.message.reply_text("⏳ Checking Facebook cookies... Please wait.")
+            await update.message.reply_text("⏳ Verifying your submission... Please wait.")
             
-            if len(cookies_data) > 5:  
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                final_data = f"UID: {user_uid} | Cookies: {cookies_data}"
-                
-                save_to_sheet("FB_Cookies", [timestamp, str(telegram_id), str(username), final_data, "Approved"])
-                
-                await update.message.reply_text("✅ Facebook Cookies Valid!\n🎉 Task completed successfully! $0.050 added to your balance.")
+            if len(proof_data) > 5:  
+                await update.message.reply_text(f"✅ {task_type} Verified Successfully!\n🎉 UID: {user_uid}\nReward added to your pending balance.")
             else:
-                await update.message.reply_text("❌ Facebook Cookies Invalid or Expired!")
+                await update.message.reply_text("❌ Invalid data provided! Task rejected.")
                 
             context.user_data.clear()
         else:
@@ -108,19 +81,28 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     
-    if data == "fb_cookies_task":
+    if data.startswith("task__") or data in ["task_fb_cookies", "task_fb_2fa", "task_instagram"]:
         rand_name = f"User_{random.randint(1000, 9999)}"
         rand_pass = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
         
+        task_names = {
+            "task_fb_cookies": "Facebook Cookies",
+            "task_fb_2fa": "Facebook 2FA",
+            "task_instagram": "Instagram Account"
+        }
+        
+        current_task_name = task_names.get(data, "Task")
+        
         context.user_data['step'] = 'waiting_uid'
+        context.user_data['task_type'] = current_task_name
         context.user_data['temp_name'] = rand_name
         context.user_data['temp_pass'] = rand_pass
         
         text = (
-            f"📂 **Facebook Account (Cookies Only)**\n\n"
-            f"👤 **Name:** {rand_name}\n"
+            f"📂 **{current_task_name} Task**\n\n"
+            f"👤 **Details / Name:** {rand_name}\n"
             f"🔑 **Password:** {rand_pass}\n\n"
-            f"1️⃣ Create a Facebook account using these details.\n"
+            f"1️⃣ Complete the task using these details.\n"
             f"2️⃣ Send your account UID in chat right now."
         )
         keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]]
@@ -138,7 +120,7 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    print("Bot is running...")
+    print("Bot is running with multi-task support...")
     application.run_polling()
 
 if __name__ == "__main__":
