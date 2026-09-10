@@ -1,6 +1,5 @@
 import random
 import string
-from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -111,23 +110,39 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     else:
         current_step = context.user_data.get('step')
-        task_type = context.user_data.get('task_type', 'Task')
+        task_type = context.user_data.get('task_type', '')
         
-        if current_step == 'waiting_uid':
-            context.user_data['submitted_uid'] = text
-            context.user_data['step'] = 'waiting_proof'
-            await update.message.reply_text(
-                f"ID Please provide the Facebook UID:",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]])
-            )
-            
-        elif current_step == 'waiting_proof':
-            proof_data = text
-            await update.message.reply_text(
-                f"✅ Facebook Account Submitted!\nThe {task_type} account has been securely logged.\n⏳ An admin will review it within 2-3 hours."
-            )
-            context.user_data.clear()
-            
+        # --- 2FA TASK FLOW ---
+        if task_type == "2FA":
+            if current_step == 'waiting_uid':
+                context.user_data['submitted_uid'] = text
+                context.user_data['step'] = 'waiting_proof'
+                await update.message.reply_text(
+                    "ID Please provide the Facebook UID:",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]])
+                )
+            elif current_step == 'waiting_proof':
+                await update.message.reply_text(
+                    "✅ Facebook Account Submitted!\nThe 2FA account has been securely logged.\n⏳ An admin will review it within 2-3 hours."
+                )
+                context.user_data.clear()
+
+        # --- COOKIES TASK FLOW (সংশোধিত: প্রথমে কুকিজ, তারপর ইউআইডি) ---
+        elif task_type == "Cookies":
+            if current_step == 'waiting_cookies':
+                context.user_data['submitted_cookies'] = text
+                context.user_data['step'] = 'waiting_cookies_uid'
+                await update.message.reply_text(
+                    "🆔 Please provide the Facebook UID for this cookie:",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]])
+                )
+            elif current_step == 'waiting_cookies_uid':
+                await update.message.reply_text(
+                    "✅ Facebook Account (Cookies) Submitted Successfully!\n⏳ An admin will review it within 2-3 hours."
+                )
+                context.user_data.clear()
+
+        # --- WITHDRAW FLOW ---
         elif current_step == 'waiting_bep20_address':
             wallet_addr = text
             await update.message.reply_text(
@@ -148,26 +163,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     
-    if data in ["task_fb_cookies", "task_fb_2fa"]:
-        rand_name = f"Michael Fernandez"
-        rand_pass = f"JjuXqZ7jVzCv"
-        
-        task_names = {
-            "task_fb_cookies": "Cookies",
-            "task_fb_2fa": "2FA"
-        }
-        current_task_name = task_names.get(data, "Task")
-        
+    if data == "task_fb_2fa":
         context.user_data['step'] = 'waiting_uid'
-        context.user_data['task_type'] = current_task_name
+        context.user_data['task_type'] = "2FA"
         
         text = (
-            f"📁 **Create Facebook Account ({current_task_name})**\n\n"
-            f"👤 **Name:** {rand_name}\n"
-            f"🔑 **Password:** {rand_pass}\n\n"
-            f"1️⃣ Create a Facebook account using these details.\n"
-            f"2️⃣ Do NOT enable 2FA.\n"
-            f"3️⃣ Click the button below to provide your account UID."
+            "📁 **Create Facebook Account (2FA)**\n\n"
+            "👤 **Name:** Michael Fernandez\n"
+            "🔑 **Password:** JjuXqZ7jVzCv\n\n"
+            "1️⃣ Create a Facebook account using these details.\n"
+            "2️⃣ Enable 2FA.\n"
+            "3️⃣ Click the button below to provide your details."
         )
         keyboard = [
             [InlineKeyboardButton("🆔 Submit UID ➡️", callback_data="submit_uid_prompt")],
@@ -175,10 +181,35 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_task")]
         ]
         await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "task_fb_cookies":
+        context.user_data['step'] = 'waiting_cookies'
+        context.user_data['task_type'] = "Cookies"
+        
+        text = (
+            "📁 **Create Facebook Account (Cookies Only)**\n\n"
+            "👤 **Name:** Michael Fernandez\n"
+            "🔑 **Password:** JjuXqZ7jVzCv\n\n"
+            "1️⃣ Create a Facebook account using these details.\n"
+            "2️⃣ Do NOT enable 2FA.\n"
+            "3️⃣ Click the button below to provide your Account Cookies."
+        )
+        keyboard = [
+            [InlineKeyboardButton("🍪 Submit Cookies ➡️", callback_data="submit_cookies_prompt")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="back_to_tasks")],
+            [InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_task")]
+        ]
+        await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         
     elif data == "submit_uid_prompt":
         await query.message.reply_text(
-            "🔑 Please paste your Facebook UID or details below:",
+            "🔑 Please paste your Facebook 2FA Setup Key or details below:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]])
+        )
+
+    elif data == "submit_cookies_prompt":
+        await query.message.reply_text(
+            "🍪 Please paste your Facebook Cookies below (Formats accepted: Netscape, JSON, or String):",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]])
         )
         
