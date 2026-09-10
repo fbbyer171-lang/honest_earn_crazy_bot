@@ -24,13 +24,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     await update.message.reply_text(f"Hello, {user_name}! 👋\n\nWelcome to the Task Bot. Choose an option below:", reply_markup=reply_markup)
 
-# ২. টেক্সট মেসেজ হ্যান্ডলার
+# ২. টেক্সট মেসেজ হ্যান্ডলার (সব মেনু বাটনগুলোর কাজ এখানে সেট করা)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     
     if text == "🚀 Start Work":
         context.user_data.clear()
-        # এখানে একাধিক টাস্ক ক্যাটাগরির বাটনগুলো তৈরি করা হয়েছে
         keyboard = [
             [InlineKeyboardButton("📁 Create FB Account (Cookies Only)", callback_data="task_fb_cookies")],
             [InlineKeyboardButton("🔐 Facebook 2FA Task", callback_data="task_fb_2fa")],
@@ -45,6 +44,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif text == "💸 Withdraw":
         await update.message.reply_text("💳 Minimum withdraw is $1.00.\nPlease select your payment method (bKash/Nagad).")
+        
+    elif text == "👥 Referrals":
+        user_id = update.effective_user.id
+        ref_link = f"https://t.me/{context.bot.username}?start=ref_{user_id}"
+        await update.message.reply_text(f"👥 **Referral Program**\n\nInvite your friends and earn 10% commission from their earnings!\n\n🔗 Your Referral Link:\n`{ref_link}`", parse_mode="Markdown")
+        
+    elif text == "🏆 Leaderboard":
+        await update.message.reply_text("🏆 **Top Earners Leaderboard**\n\n1. User_9821 - $15.500\n2. User_4312 - $12.000\n3. User_7761 - $9.250\n\nKeep working to rank up!")
+        
+    elif text == "📊 Statistics":
+        await update.message.reply_text("📊 **Bot Statistics**\n\n👥 Total Users: 1,420\n✅ Total Tasks Completed: 3,890\n💰 Total Paid Out: $145.00")
+        
+    elif text == "🎧 Support":
+        await update.message.reply_text("🎧 **Customer Support**\n\nIf you face any issues with tasks or payments, contact our admin: @AdminUsername")
+        
+    elif text == "❓ Help":
+        await update.message.reply_text("❓ **How to use this bot?**\n\n1. Click on '🚀 Start Work'.\n2. Select a task category.\n3. Complete the task following instructions and submit your UID & proof.\n4. Earn money instantly!")
         
     else:
         current_step = context.user_data.get('step')
@@ -76,7 +92,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("💡 Please use the menu buttons below or type /start.")
 
-# ৩. ইনলাইন বাটন হ্যান্ডলার (ক্যাটাগরি হ্যান্ডেল করার জন্য)
+# ৩. ইনলাইন বাটন হ্যান্ডলার (টাস্ক সিলেক্ট করার জন্য)
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -121,7 +137,7 @@ def main():
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
-    print("Bot is running with multi-category task support...")
+    print("Bot is running perfectly with all features...")
     application.run_polling()
 
 if __name__ == "__main__":
