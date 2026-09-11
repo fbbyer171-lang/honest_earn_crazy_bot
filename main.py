@@ -1,5 +1,5 @@
 import os
-import time
+import threading
 from flask import Flask, render_template, request, redirect, url_for, flash
 import telebot
 from telebot import types
@@ -90,7 +90,6 @@ def process_2fa_submission(message):
     username = message.from_user.username or "Unknown"
     fa_key = message.text
 
-    # Google Sheets / DB Logging strictly restricted to: Username, UID, 2FA, Cookies
     submission = {
         "id": len(submissions_db) + 1,
         "username": f"@{username}",
@@ -109,7 +108,6 @@ def process_cookies_submission(message):
     username = message.from_user.username or "Unknown"
     cookies_data = message.text
 
-    # Google Sheets / DB Logging strictly restricted to: Username, UID, 2FA, Cookies
     submission = {
         "id": len(submissions_db) + 1,
         "username": f"@{username}",
@@ -139,7 +137,7 @@ def save_withdrawal(message):
     withdrawals_db.append({"id": len(withdrawals_db) + 1, "user": message.from_user.username, "wallet": wallet, "status": "Pending"})
     bot.send_message(message.chat.id, f"✅ *Withdrawal Request Submitted with wallet:* `{wallet}`")
 
-# --- FLASK ADMIN DASHBOARD (Sidebar Layout) ---
+# --- FLASK ADMIN DASHBOARD ---
 
 @app.route('/')
 def admin_dashboard():
@@ -170,35 +168,15 @@ def reject_task(sub_id):
             sub['status'] = 'Rejected'
     return redirect(url_for('admin_dashboard'))
 
-# Embedded HTML Template for Sidebar Admin UI if templates folder is missing
-@app.route('/embedded_ui')
-def embedded_ui():
-    return """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head><title>HONEST CRAZY EARN BOT - Admin</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
-    <body class="bg-dark text-white">
-    <div class="container-fluid">
-        <div class="row">
-            <nav class="col-md-3 col-lg-2 d-md-block bg-secondary sidebar collapse p-3" style="min-height: 100vh;">
-                <h4>Bot Admin</h4>
-                <ul class="nav flex-column mt-4">
-                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">📊 Dashboard</a></li>
-                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">📋 Submissions</a></li>
-                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">💸 Withdrawals</a></li>
-                </ul>
-            </nav>
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
-                <h2>HONEST CRAZY EARN BOT Management Panel</h2>
-                <p>Sidebar dashboard active. Rates: Cookie $0.065, 2FA $0.06, Timer: 45 Mins.</p>
-            </main>
-        </div>
-    </div>
-    </body>
-    </html>
-    """
+# Background thread runner for Telegram Bot
+def run_bot():
+    bot.infinity_none_stop = True
+    bot.infinity_polling()
 
 if __name__ == '__main__':
-    # To run Telegram bot polling in background or flask web server
+    # Start Telegram Bot in a separate background thread to prevent crashing with Flask
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    # Run Flask Web Server
     app.run(host='0.0.0.0', port=5000)
