@@ -31,6 +31,7 @@ def send_welcome(message):
     username = message.from_user.username or "NoUsername"
     users_db[user_id] = {"uid": user_id, "username": username, "balance": 0.0}
 
+    # Clean Reply Keyboard without redundant Support/Help buttons
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn_start_work = types.KeyboardButton("🚀 Start Work")
     btn_balance = types.KeyboardButton("💰 Balance")
@@ -168,15 +169,39 @@ def reject_task(sub_id):
             sub['status'] = 'Rejected'
     return redirect(url_for('admin_dashboard'))
 
-# Background thread runner for Telegram Bot
+@app.route('/embedded_ui')
+def embedded_ui():
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><title>HONEST CRAZY EARN BOT - Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+    <body class="bg-dark text-white">
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-md-3 col-lg-2 d-md-block bg-secondary sidebar collapse p-3" style="min-height: 100vh;">
+                <h4>Bot Admin</h4>
+                <ul class="nav flex-column mt-4">
+                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">📊 Dashboard</a></li>
+                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">📋 Submissions</a></li>
+                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">💸 Withdrawals</a></li>
+                </ul>
+            </nav>
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+                <h2>HONEST CRAZY EARN BOT Management Panel</h2>
+                <p>Sidebar dashboard active. Rates: Cookie $0.065, 2FA $0.06, Timer: 45 Mins.</p>
+            </main>
+        </div>
+    </div>
+    </body>
+    </html>
+    """
+
 def run_bot():
     bot.infinity_none_stop = True
     bot.infinity_polling()
 
 if __name__ == '__main__':
-    # Start Telegram Bot in a separate background thread to prevent crashing with Flask
     bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
-    
-    # Run Flask Web Server
     app.run(host='0.0.0.0', port=5000)
