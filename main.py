@@ -18,7 +18,7 @@ settings = {
     "timer_minutes": 45
 }
 
-# In-memory storage for database-free execution on Replit
+# In-memory storage for database-free execution
 submissions_db = []
 withdrawals_db = []
 users_db = {}
@@ -31,7 +31,6 @@ def send_welcome(message):
     username = message.from_user.username or "NoUsername"
     users_db[user_id] = {"uid": user_id, "username": username, "balance": 0.0}
 
-    # Clean Reply Keyboard without redundant Support/Help buttons
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     btn_start_work = types.KeyboardButton("🚀 Start Work")
     btn_balance = types.KeyboardButton("💰 Balance")
@@ -198,8 +197,7 @@ def embedded_ui():
     """
 
 def run_bot():
-    bot.infinity_none_stop = True
-    bot.infinity_polling()
+    bot.infinity_polling(none_stop=True)
 
 if __name__ == '__main__':
     bot_thread = threading.Thread(target=run_bot, daemon=True)
