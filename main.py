@@ -1,297 +1,204 @@
 import os
-import random
-import string
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    ContextTypes,
-    CallbackQueryHandler,
-    MessageHandler,
-    filters,
-)
+import time
+from flask import Flask, render_template, request, redirect, url_for, flash
+import telebot
+from telebot import types
 
-FORCE_SUB_CHANNEL = "@honestcrazy11"
-HELP_ADMIN = "@timotyservice"
-SUPPORT_ADMIN = "@Owners_honestearnnow790"
+# Configuration & Branding: HONEST CRAZY EARN BOT
+TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 
-FIRST_NAMES = ["Michael", "David", "Robert", "James", "William", "John", "Richard", "Thomas", "Charles", "Daniel"]
-LAST_NAMES = ["Fernandez", "Smith", "Johnson", "Brown", "Taylor", "Miller", "Wilson", "Anderson", "Jackson", "White"]
+app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "honest_crazy_secret_key")
 
-def generate_random_credentials():
-    name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
-    password = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
-    return name, password
+# Pricing Specs & Global State
+settings = {
+    "cookie_rate": 0.065,
+    "fa_rate": 0.06,
+    "timer_minutes": 45
+}
 
-async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    user_id = update.effective_user.id
-    try:
-        member = await context.bot.get_chat_member(chat_id=FORCE_SUB_CHANNEL, user_id=user_id)
-        if member.status in ['member', 'administrator', 'creator']:
-            return True
-    except Exception as e:
-        print(f"Subscription Check Error: {e}")
-        return True 
-    return False
+# In-memory storage for database-free execution on Replit
+submissions_db = []
+withdrawals_db = []
+users_db = {}
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    
-    is_subscribed = await check_subscription(update, context)
-    if not is_subscribed:
-        keyboard = [
-            [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{FORCE_SUB_CHANNEL.replace('@', '')}")],
-            [InlineKeyboardButton("✅ Joined / Check", callback_data="check_join")]
-        ]
-        await update.message.reply_text(
-            "⚠️ **Please join our channel first to use this bot!**\n\n"
-            f"Channel: {FORCE_SUB_CHANNEL}\n\n"
-            "After joining, click the button below.",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-        return
+# --- TELEGRAM BOT LOGIC ---
 
-    keyboard = [
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
-         InlineKeyboardButton("🇧🇩 বাংলা", callback_data="lang_bn"),
-         InlineKeyboardButton("🇲🇬 Malagasy", callback_data="lang_mg")]
-    ]
-    await update.message.reply_text(
-        "🌐 **Please select your language / ভাষা পরিবর্তন করুন / Ovay ny fiteny :**",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    user_id = message.from_user.id
+    username = message.from_user.username or "NoUsername"
+    users_db[user_id] = {"uid": user_id, "username": username, "balance": 0.0}
+
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    btn_start_work = types.KeyboardButton("🚀 Start Work")
+    btn_balance = types.KeyboardButton("💰 Balance")
+    btn_withdraw = types.KeyboardButton("💸 Withdraw")
+    btn_referrals = types.KeyboardButton("👥 Referrals")
+    btn_leaderboard = types.KeyboardButton("🏆 Leaderboard")
+    btn_stats = types.KeyboardButton("📊 Statistics")
+    markup.add(btn_start_work, btn_balance, btn_withdraw, btn_referrals, btn_leaderboard, btn_stats)
+
+    welcome_text = (
+        "🤖 *Welcome to HONEST CRAZY EARN BOT* 🤖\n\n"
+        "Earn real rewards securely by completing verified Facebook & Instagram tasks.\n"
+        f"• Cookies Task Rate: `${settings['cookie_rate']}`\n"
+        f"• 2FA Task Rate: `${settings['fa_rate']}`\n"
+        f"• Report Time Limit: `{settings['timer_minutes']} Minutes`\n\n"
+        "Choose an option below to get started:"
     )
+    bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
 
-# ভাষা পরিবর্তনের নতুন কমান্ড ফাংশন
-async def change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
-         InlineKeyboardButton("🇧🇩 বাংলা", callback_data="lang_bn"),
-         InlineKeyboardButton("🇲🇬 Malagasy", callback_data="lang_mg")]
-    ]
-    await update.message.reply_text(
-        "🌐 **Select your language / ভাষা পরিবর্তন করুন / Ovay ny fiteny :**",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
+@bot.message_handler(func=lambda message: message.text == "🚀 Start Work")
+def start_work(message):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    btn_fa = types.InlineKeyboardButton(f"🔑 2FA Task (${settings['fa_rate']})", callback_data="task_2fa")
+    btn_cookies = types.InlineKeyboardButton(f"🍪 Cookies Task (${settings['cookie_rate']})", callback_data="task_cookies")
+    btn_cancel = types.InlineKeyboardButton("❌ Cancel", callback_data="task_cancel")
+    markup.add(btn_fa, btn_cookies, btn_cancel)
+    bot.send_message(message.chat.id, "📁 *Select Task Category:*", reply_markup=markup)
 
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    
-    if data == "check_join":
-        is_subscribed = await check_subscription(update, context)
-        if is_subscribed:
-            keyboard = [
-                [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
-                 InlineKeyboardButton("🇧🇩 বাংলা", callback_data="lang_bn"),
-                 InlineKeyboardButton("🇲🇬 Malagasy", callback_data="lang_mg")]
-            ]
-            await query.message.edit_text(
-                "✅ Thank you for joining! Please select your language:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        else:
-            await query.answer("❌ You haven't joined the channel yet!", show_alert=True)
-            return
-
-    elif data.startswith("lang_"):
-        lang = data.split("_")[1]
-        context.user_data['lang'] = lang
-        
-        if lang == "bn":
-            menu = [
-                ["🚀 কাজ শুরু করুন", "💰 ব্যালেন্স"],
-                ["💸 পেমেন্ট তুলুন", "👥 রেফারেল"],
-                ["🏆 লিডারবোর্ড", "📊 স্ট্যাটিস্টিক্স"],
-                ["🎧 সাপোর্ট", "❓ হেল্প"]
-            ]
-            welcome_text = "স্বাগতম! নিচের মেনু থেকে অপশন বেছে নিন (ভাষা পরিবর্তন করতে /language লিখুন):"
-        elif lang == "mg":
-            menu = [
-                ["🚀 Manomboka", "💰 Vola"],
-                ["💸 Maka Vola", "👥 Olona nasaina"],
-                ["🏆 Laharana", "📊 Antontan'isa"],
-                ["🎧 Fanohanana", "❓ Fanampiana"]
-            ]
-            welcome_text = "Tongasoa soa! Safidio eto ambany ny safidy:"
-        else:
-            menu = [
-                ["🚀 Start Work", "💰 Balance"],
-                ["💸 Withdraw", "👥 Referrals"],
-                ["🏆 Leaderboard", "📊 Statistics"],
-                ["🎧 Support", "📁 Help"]
-            ]
-            welcome_text = "Welcome! Choose an option below (Type /language to change language anytime):"
-
-        reply_markup = ReplyKeyboardMarkup(menu, resize_keyboard=True)
-        await query.message.reply_text(welcome_text, reply_markup=reply_markup)
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    
-    if not await check_subscription(update, context):
-        await update.message.reply_text(f"⚠️ Please join {FORCE_SUB_CHANNEL} first using /start")
-        return
-
-    lang = context.user_data.get('lang', 'en')
-
-    if text in ["🚀 Start Work", "🚀 কাজ শুরু করুন", "🚀 Manomboka"]:
-        context.user_data.clear()
-        context.user_data['lang'] = lang
-        keyboard = [
-            [InlineKeyboardButton("🔑 2FA Task ($0.050)", callback_data="task_fb_2fa")],
-            [InlineKeyboardButton("🍪 Cookies Task ($0.049)", callback_data="task_fb_cookies")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]
-        ]
-        await update.message.reply_text(
-            "📁 **Select Task Category:**",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-        
-    elif text in ["💰 Balance", "💰 ব্যালেন্স", "💰 Vola"]:
-        context.user_data.clear()
-        await update.message.reply_text("💰 **Current Balance:** $0.000\n✨ Complete tasks to earn more!")
-        
-    elif text in ["💸 Withdraw", "💸 পেমেন্ট তুলুন", "💸 Maka Vola"]:
-        context.user_data.clear()
-        keyboard = [[InlineKeyboardButton("🟡 Binance (BEP20)", callback_data="withdraw_binance_bep20")]]
-        await update.message.reply_text(
-            "💳 **Withdrawal Section**\n\n• Minimum Withdraw: **$0.20**",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-        
-    elif text in ["👥 Referrals", "👥 রেফারেল", "👥 Olona nasaina"]:
-        context.user_data.clear()
-        user_id = update.effective_user.id
-        ref_link = f"https://t.me/{context.bot.username}?start=ref_{user_id}"
-        await update.message.reply_text(
-            f"👥 **Referral Program**\n\n🔗 Link:\n`{ref_link}`\n\n"
-            f"📊 Total: 0 | Pending: 0 | Active: 0\n💰 Earned: $0.000",
-            parse_mode="Markdown"
-        )
-        
-    elif text in ["🏆 Leaderboard", "🏆 লিডারবোর্ড", "🏆 Laharana"]:
-        context.user_data.clear()
-        await update.message.reply_text("🏆 **Top Earners Leaderboard**\nNo data yet.")
-        
-    elif text in ["📊 Statistics", "📊 স্ট্যাটিস্টিক্স", "📊 Antontan'isa"]:
-        context.user_data.clear()
-        await update.message.reply_text(
-            "📊 **Your Work Statistics**\n\n"
-            "📝 Total Submitted: 0\n"
-            "✅ Total Success: 0\n"
-            "⏳ Review Pending/Hold: 0\n"
-            "❌ Admin Rejected: 0\n"
-            "🤖 Bot Rejected: 0"
-        )
-        
-    elif text in ["🎧 Support", "🎧 সাপোর্ট", "🎧 Fanohanana"]:
-        context.user_data.clear()
-        keyboard = [[InlineKeyboardButton("💻 Support Admin", url=f"https://t.me/{SUPPORT_ADMIN.replace('@', '')}")]]
-        await update.message.reply_text(
-            f"🎧 **Customer Support**\nContact our admin below:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        
-    elif text in ["📁 Help", "❓ হেল্প", "❓ Fanampiana"]:
-        context.user_data.clear()
-        keyboard = [[InlineKeyboardButton("💻 Help Admin", url=f"https://t.me/{HELP_ADMIN.replace('@', '')}")]]
-        await update.message.reply_text(
-            f"❓ **Help Center**\nNeed assistance? Contact our admin below:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-        
-    else:
-        current_step = context.user_data.get('step')
-        task_type = context.user_data.get('task_type', '')
-        
-        if task_type == "2FA":
-            if current_step == 'waiting_2fa_key':
-                context.user_data['submitted_2fa'] = text
-                context.user_data['step'] = 'waiting_2fa_uid'
-                await update.message.reply_text("ID Please provide the Facebook UID:")
-            elif current_step == 'waiting_2fa_uid':
-                await update.message.reply_text("✅ 2FA Account Submitted Successfully! Sent to Google Sheets (2FA Sheet). Review pending.")
-                context.user_data.clear()
-
-        elif task_type == "Cookies":
-            if current_step == 'waiting_cookies':
-                context.user_data['submitted_cookies'] = text
-                context.user_data['step'] = 'waiting_cookies_uid'
-                await update.message.reply_text("🆔 Please provide the Facebook UID for this cookie:")
-            elif current_step == 'waiting_cookies_uid':
-                await update.message.reply_text("✅ Cookies Account Submitted Successfully! Sent to Google Sheets (Cookies Sheet). Review pending.")
-                context.user_data.clear()
-
-        elif current_step == 'waiting_bep20_address':
-            await update.message.reply_text(f"✅ Withdrawal Request Submitted with wallet: `{text}`", parse_mode="Markdown")
-            context.user_data.clear()
-        else:
-            await update.message.reply_text("💡 Please use the menu buttons, type /start, or /language to change language.")
-
-async def task_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    
-    if data == "task_fb_2fa":
-        name, password = generate_random_credentials()
-        context.user_data['step'] = 'waiting_2fa_key'
-        context.user_data['task_type'] = "2FA"
-        
+@bot.callback_query_handler(func=lambda call: call.data.startswith("task_"))
+def task_callback(call):
+    chat_id = call.message.chat.id
+    if call.data == "task_2fa":
         text = (
-            f"📁 **Create Facebook Account (2FA)**\n\n"
-            f"👤 **Name:** {name}\n"
-            f"🔑 **Password:** {password}\n\n"
-            f"1️⃣ Create account using details.\n"
-            f"2️⃣ Enable 2FA.\n"
-            f"3️⃣ Submit your 2FA Key below:"
+            "📁 *Create Facebook Account (2FA)*\n\n"
+            "👤 Name: James Taylor\n"
+            "🔑 Password: 6JsoG2CpAy\n\n"
+            "1️⃣ Create account using details.\n"
+            "2️⃣ Enable 2FA.\n"
+            "3️⃣ Submit your 2FA Key below within 45 minutes:"
         )
-        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]]
-        await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-
-    elif data == "task_fb_cookies":
-        name, password = generate_random_credentials()
-        context.user_data['step'] = 'waiting_cookies'
-        context.user_data['task_type'] = "Cookies"
-        
+        bot.edit_message_text(text, chat_id, call.message.message_id)
+        bot.register_next_step_handler(call.message, process_2fa_submission)
+    elif call.data == "task_cookies":
         text = (
-            f"📁 **Create Facebook Account (Cookies)**\n\n"
-            f"👤 **Name:** {name}\n"
-            f"🔑 **Password:** {password}\n\n"
-            f"1️⃣ Create account using details.\n"
-            f"2️⃣ Do NOT enable 2FA.\n"
-            f"3️⃣ Submit your Cookies below:"
+            "📁 *Facebook Cookies Task*\n\n"
+            "1️⃣ Login securely to the provided browser profile.\n"
+            "2️⃣ Export your active session JSON/Cookies.\n"
+            "3️⃣ Submit your raw Cookies string below within 45 minutes:"
         )
-        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_task")]]
-        await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        bot.edit_message_text(text, chat_id, call.message.message_id)
+        bot.register_next_step_handler(call.message, process_cookies_submission)
+    elif call.data == "task_cancel":
+        bot.edit_message_text("❌ Task cancelled.", chat_id, call.message.message_id)
 
-    elif data == "withdraw_binance_bep20":
-        context.user_data['step'] = 'waiting_bep20_address'
-        await query.message.reply_text("🟡 Send your **Binance USDT (BEP20)** address:", parse_mode="Markdown")
-        
-    elif data == "cancel_task":
-        context.user_data.clear()
-        await query.message.reply_text("❌ Process Cancelled.")
+def process_2fa_submission(message):
+    user_id = message.from_user.id
+    username = message.from_user.username or "Unknown"
+    fa_key = message.text
 
-def main():
-    TOKEN = "8980706201:AAHmK_q9vcStJiTbd-m1HGaDjbYhga3pfps"
-    application = Application.builder().token(TOKEN).build()
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("language", change_language))
-    application.add_handler(CommandHandler("lang", change_language))
-    application.add_handler(CallbackQueryHandler(handle_callback, pattern="^(lang_|check_join)"))
-    application.add_handler(CallbackQueryHandler(task_callback))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    
-    print("Bot is running perfectly with all features...")
-    application.run_polling()
+    # Google Sheets / DB Logging strictly restricted to: Username, UID, 2FA, Cookies
+    submission = {
+        "id": len(submissions_db) + 1,
+        "username": f"@{username}",
+        "uid": str(user_id),
+        "task_type": "2FA Task",
+        "two_fa": fa_key,
+        "cookies": "Not Provided",
+        "status": "Pending",
+        "reward": settings['fa_rate']
+    }
+    submissions_db.append(submission)
+    bot.send_message(message.chat.id, "✅ *2FA Key Submitted Successfully!* Waiting for admin verification.")
 
-if __name__ == "__main__":
-    main()
+def process_cookies_submission(message):
+    user_id = message.from_user.id
+    username = message.from_user.username or "Unknown"
+    cookies_data = message.text
+
+    # Google Sheets / DB Logging strictly restricted to: Username, UID, 2FA, Cookies
+    submission = {
+        "id": len(submissions_db) + 1,
+        "username": f"@{username}",
+        "uid": str(user_id),
+        "task_type": "Cookies Task",
+        "two_fa": "Not Provided",
+        "cookies": cookies_data,
+        "status": "Pending",
+        "reward": settings['cookie_rate']
+    }
+    submissions_db.append(submission)
+    bot.send_message(message.chat.id, "✅ *Cookies Submitted Successfully!* Waiting for admin verification.")
+
+@bot.message_handler(func=lambda message: message.text == "💰 Balance")
+def check_balance(message):
+    user_id = message.from_user.id
+    bal = users_db.get(user_id, {}).get("balance", 0.0)
+    bot.send_message(message.chat.id, f"💰 *Your Current Balance:* `${bal:.3f}`")
+
+@bot.message_handler(func=lambda message: message.text == "💸 Withdraw")
+def request_withdraw(message):
+    bot.send_message(message.chat.id, "💸 Please send your withdrawal wallet address:")
+    bot.register_next_step_handler(message, save_withdrawal)
+
+def save_withdrawal(message):
+    wallet = message.text
+    withdrawals_db.append({"id": len(withdrawals_db) + 1, "user": message.from_user.username, "wallet": wallet, "status": "Pending"})
+    bot.send_message(message.chat.id, f"✅ *Withdrawal Request Submitted with wallet:* `{wallet}`")
+
+# --- FLASK ADMIN DASHBOARD (Sidebar Layout) ---
+
+@app.route('/')
+def admin_dashboard():
+    return render_template('dashboard.html', settings=settings, submissions=submissions_db, withdrawals=withdrawals_db)
+
+@app.route('/update_settings', methods=['POST'])
+def update_settings():
+    settings['cookie_rate'] = float(request.form.get('cookie_rate', 0.065))
+    settings['fa_rate'] = float(request.form.get('fa_rate', 0.06))
+    settings['timer_minutes'] = int(request.form.get('timer_minutes', 45))
+    flash("Settings updated successfully!")
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/approve/<int:sub_id>')
+def approve_task(sub_id):
+    for sub in submissions_db:
+        if sub['id'] == sub_id:
+            sub['status'] = 'Approved'
+            uid = int(sub['uid'])
+            if uid in users_db:
+                users_db[uid]['balance'] += sub['reward']
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/reject/<int:sub_id>')
+def reject_task(sub_id):
+    for sub in submissions_db:
+        if sub['id'] == sub_id:
+            sub['status'] = 'Rejected'
+    return redirect(url_for('admin_dashboard'))
+
+# Embedded HTML Template for Sidebar Admin UI if templates folder is missing
+@app.route('/embedded_ui')
+def embedded_ui():
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><title>HONEST CRAZY EARN BOT - Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+    <body class="bg-dark text-white">
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-md-3 col-lg-2 d-md-block bg-secondary sidebar collapse p-3" style="min-height: 100vh;">
+                <h4>Bot Admin</h4>
+                <ul class="nav flex-column mt-4">
+                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">📊 Dashboard</a></li>
+                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">📋 Submissions</a></li>
+                    <li class="nav-item mb-2"><a href="#" class="nav-link text-white">💸 Withdrawals</a></li>
+                </ul>
+            </nav>
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+                <h2>HONEST CRAZY EARN BOT Management Panel</h2>
+                <p>Sidebar dashboard active. Rates: Cookie $0.065, 2FA $0.06, Timer: 45 Mins.</p>
+            </main>
+        </div>
+    </div>
+    </body>
+    </html>
+    """
+
+if __name__ == '__main__':
+    # To run Telegram bot polling in background or flask web server
+    app.run(host='0.0.0.0', port=5000)
