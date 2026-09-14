@@ -12,12 +12,12 @@ user_data = {}
 def get_user(chat_id):
     if chat_id not in user_data:
         user_data[chat_id] = {
-            "balance": 0.90,
-            "total_submitted": 43,
-            "total_success": 28,
-            "review_pending": 3,
-            "admin_rejected": 12,
-            "bot_rejected": 12,
+            "balance": 0.,
+            "total_submitted": ,
+            "total_success": ,
+            "review_pending": ,
+            "admin_rejected": ,
+            "bot_rejected": ,
             "state": None,
             "sub_state": None,
             "task_data": {}
