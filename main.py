@@ -1,359 +1,508 @@
-import os
+import logging
 import telebot
 from telebot import types
-import random
 
+# Bot Configuration
 TOKEN = "8980706201:AAHmK_q9vcStJiTbd-m1HGaDjbYhga3pfps"
-bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
+ADMIN_CHAT_ID = 8856278248  # Your Admin Chat ID
+SUPPORT_USERNAME = "@sacrifice_no"
 
-# আপনার টেলিগ্রাম চ্যাট আইডি এখানে সেট করা হলো
-ADMIN_CHAT_ID = 8856278248
+# Public Channel Username
+PUBLIC_CHANNEL_USERNAME = "@honestcrazy11"
 
-# User Data Storage
+bot = telebot.TeleBot(TOKEN)
+logging.basicConfig(level=logging.INFO)
+
+# In-memory storage for user data
 user_data = {}
 
-def get_user(chat_id):
-    if chat_id not in user_data:
-        user_data[chat_id] = {
-            "balance": 0.00,
-            "total_submitted": 0,
-            "total_success": 0,
-            "review_pending": 0,
-            "admin_rejected": 0,
-            "bot_rejected": 0,
-            "referrals": 0,
-            "ref_earnings": 0.00,
-            "state": None,
-            "sub_state": None,
-            "task_data": {},
-            "withdraw_method": None
-        }
-    return user_data[chat_id]
 
-# Random Generator Helpers
-FIRST_NAMES = ["Michael", "David", "John", "Robert", "William", "James", "Alex", "Daniel", "Chris", "Thomas"]
-LAST_NAMES = ["Fernandez", "Smith", "Johnson", "Brown", "Taylor", "Miller", "Wilson", "Anderson", "Thomas", "Jackson"]
+def get_main_menu():
+  markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+  btn_work = types.KeyboardButton("🚀 Start Work")
+  btn_balance = types.KeyboardButton("💰 Balance")
+  btn_withdraw = types.KeyboardButton("💸 Withdraw")
+  btn_ref = types.KeyboardButton("👥 Referrals")
+  btn_leaderboard = types.KeyboardButton("🏆 Leaderboard")
+  btn_stats = types.KeyboardButton("📊 Statistics")
+  btn_support = types.KeyboardButton("🎧 Support")
+  btn_help = types.KeyboardButton("❓ Help")
+  markup.add(
+      btn_work,
+      btn_balance,
+      btn_withdraw,
+      btn_ref,
+      btn_leaderboard,
+      btn_stats,
+      btn_support,
+      btn_help,
+  )
+  return markup
 
-def generate_random_credentials():
-    name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
-    chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%"
-    password = "".join(random.choice(chars) for _ in range(12))
-    return name, password
 
-@bot.message_handler(commands=['start'])
+def get_cancel_markup():
+  markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+  markup.add(types.KeyboardButton("❌ Cancel"))
+  return markup
+
+
+@bot.message_handler(commands=["start"])
 def send_welcome(message):
-    user_name = message.from_user.first_name
-    chat_id = message.chat.id
-    get_user(chat_id)
-    
-    welcome_text = (
-        f"স্বাগতম, *{user_name}*! 🎉\n\n"
-        "আমাদের ইানিং ও অ্যাকাউন্ট বাইয়িং বটে আপনাকে স্বাগতম। নিচে দেওয়া অপশনগুলো থেকে আপনার পছন্দের সেবাটি বেছে নিন:"
-    )
-    
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    btn_earn = types.KeyboardButton("🚀 Start Work")
-    btn_balance = types.KeyboardButton("💰 Balance")
-    btn_withdraw = types.KeyboardButton("💸 Withdraw")
-    btn_ref = types.KeyboardButton("👥 Referrals")
-    btn_leaderboard = types.KeyboardButton("🏆 Leaderboard")
-    btn_stats = types.KeyboardButton("📊 Statistics")
-    btn_support = types.KeyboardButton("🎧 Support")
-    btn_help = types.KeyboardButton("📁 Help")
-    
-    markup.add(btn_earn, btn_balance, btn_withdraw, btn_ref, btn_leaderboard, btn_stats, btn_support, btn_help)
-    bot.send_message(chat_id, welcome_text, reply_markup=markup)
+  chat_id = message.chat.id
+  if chat_id not in user_data:
+    user_data[chat_id] = {
+        "balance": 0.0,
+        "total_submitted": 0,
+        "total_success": 0,
+        "review_pending": 0,
+        "admin_rejected": 0,
+        "bot_rejected": 0,
+        "referrals": 0,
+        "active_referrals": 0,
+        "commission": 0.0,
+    }
 
-@bot.message_handler(commands=['admin'])
-def admin_panel(message):
-    chat_id = message.chat.id
-    if ADMIN_CHAT_ID and chat_id != ADMIN_CHAT_ID:
-        bot.send_message(chat_id, "❌ আপনি এই কমান্ড ব্যবহার করার জন্য অনুমোদিত নন।")
-        return
-    
-    admin_text = (
-        "🛠 *Admin Panel*\n\n"
-        "স্বাগতম অ্যাডমিন! ইউজারদের সমস্ত টাস্ক সাবমিশন ও উইথড্র রিকুয়েস্ট এই চ্যাটে রিয়েল-টাইমে চলে আসবে।"
-    )
-    bot.send_message(chat_id, admin_text)
+  welcome_text = (
+      f"👋 Welcome, *{message.from_user.first_name}*!\n\n"
+      "🤖 Earn money by completing tasks like Facebook & Instagram account submissions.\n"
+      "Please join our public channel for updates before starting work!"
+  )
+
+  # Public channel join button
+  markup = types.InlineKeyboardMarkup()
+  channel_link = f"https://t.me/{PUBLIC_CHANNEL_USERNAME.replace('@', '')}"
+  markup.add(types.InlineKeyboardButton("📢 Join Public Channel", url=channel_link))
+
+  bot.send_message(
+      chat_id, welcome_text, parse_mode="Markdown", reply_markup=markup
+  )
+  bot.send_message(
+      chat_id, "Use the menu below to start working:", reply_markup=get_main_menu()
+  )
+
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
-    text = message.text
-    chat_id = message.chat.id
-    user = get_user(chat_id)
-    state = user.get("state")
-    
-    # 1. Facebook 2FA Task Flow (2FA Key -> UID)
-    if state == "waiting_for_fb_2fa_key":
-        user["task_data"]["2fa_key"] = text
-        user["state"] = "waiting_for_fb_2fa_uid"
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_process"))
-        bot.send_message(chat_id, "🆔 Please provide your Facebook UID (Report Time: 30 minutes):", reply_markup=markup)
-        return
-        
-    elif state == "waiting_for_fb_2fa_uid":
-        user["task_data"]["uid"] = text
-        user["state"] = None
-        user["total_submitted"] += 1
-        user["review_pending"] += 1
-        user["balance"] += 0.05
-        
-        # Notify Admin
-        if ADMIN_CHAT_ID:
-            admin_msg = (
-                f"🔔 *New Facebook 2FA Task Submitted!*\n\n"
-                f"👤 User ID: `{chat_id}`\n"
-                f"🔑 2FA Key: `{user['task_data'].get('2fa_key')}`\n"
-                f"🆔 UID: `{text}`"
-            )
-            bot.send_message(ADMIN_CHAT_ID, admin_msg)
+  text = message.text
+  chat_id = message.chat.id
+  user = message.from_user
 
-        bot.send_message(chat_id, "✅ *Facebook 2FA Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
-        return
+  if chat_id not in user_data:
+    user_data[chat_id] = {
+        "balance": 0.0,
+        "total_submitted": 0,
+        "total_success": 0,
+        "review_pending": 0,
+        "admin_rejected": 0,
+        "bot_rejected": 0,
+        "referrals": 0,
+        "active_referrals": 0,
+        "commission": 0.0,
+    }
 
-    # 2. Facebook Cookies Task Flow (UID -> Cookies String)
-    elif state == "waiting_for_fb_cookies_uid":
-        user["task_data"]["uid"] = text
-        user["state"] = "waiting_for_fb_cookies_string"
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_process"))
-        bot.send_message(chat_id, "🍪 Please paste your Facebook Cookies string/JSON (Report Time: 30 minutes):", reply_markup=markup)
-        return
+  state = user_data[chat_id].get("state", None)
 
-    elif state == "waiting_for_fb_cookies_string":
-        user["task_data"]["cookies"] = text
-        user["state"] = None
-        user["total_submitted"] += 1
-        user["review_pending"] += 1
-        user["balance"] += 0.049
-        
-        # Notify Admin
-        if ADMIN_CHAT_ID:
-            admin_msg = (
-                f"🔔 *New Facebook Cookies Task Submitted!*\n\n"
-                f"👤 User ID: `{chat_id}`\n"
-                f"🆔 UID: `{user['task_data'].get('uid')}`\n"
-                f"🍪 Cookies: `{text}`"
-            )
-            bot.send_message(ADMIN_CHAT_ID, admin_msg)
+  if text == "❌ Cancel":
+    user_data[chat_id]["state"] = None
+    bot.send_message(
+        chat_id,
+        "❌ Process Cancelled. Use the menu below to continue.",
+        reply_markup=get_main_menu(),
+    )
+    return
 
-        bot.send_message(chat_id, "✅ *Facebook Cookies Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
-        return
+  # State Machine for Submissions
+  if state == "WAITING_FB_2FA_UID":
+    user_data[chat_id]["temp_uid"] = text
+    user_data[chat_id]["state"] = "WAITING_FB_2FA_KEY"
+    bot.send_message(
+        chat_id,
+        "🔑 Please paste your Facebook 2FA Setup Key (Base32 string):",
+        reply_markup=get_cancel_markup(),
+    )
+    return
 
-    # 3. Instagram 2FA Task Flow
-    elif state == "waiting_for_ig_2fa":
-        user["task_data"]["ig_2fa"] = text
-        user["state"] = None
-        user["total_submitted"] += 1
-        user["review_pending"] += 1
-        user["balance"] += 0.045
-        
-        # Notify Admin
-        if ADMIN_CHAT_ID:
-            admin_msg = (
-                f"🔔 *New Instagram 2FA Task Submitted!*\n\n"
-                f"👤 User ID: `{chat_id}`\n"
-                f"🔑 IG 2FA Key: `{text}`"
-            )
-            bot.send_message(ADMIN_CHAT_ID, admin_msg)
+  elif state == "WAITING_FB_2FA_KEY":
+    uid = user_data[chat_id].get("temp_uid")
+    key = text
+    user_data[chat_id]["state"] = None
 
-        bot.send_message(chat_id, "✅ *Instagram 2FA Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
-        return
+    user_data[chat_id]["total_submitted"] += 1
+    user_data[chat_id]["review_pending"] += 1
 
-    # 4. Withdraw Details Input Flow
-    elif state == "waiting_for_withdraw_details":
-        method = user.get("withdraw_method", "Unknown")
-        amount = user["balance"]
-        user["state"] = None
-        user["balance"] = 0.0  # Balance reset after withdrawal request
-        
-        # Notify Admin
-        if ADMIN_CHAT_ID:
-            admin_msg = (
-                f"💸 *New Withdrawal Request!*\n\n"
-                f"👤 User ID: `{chat_id}`\n"
-                f"💳 Method: `{method}`\n"
-                f"💰 Amount: `${amount:.2f}`\n"
-                f"📋 Account Details: `{text}`"
-            )
-            bot.send_message(ADMIN_CHAT_ID, admin_msg)
+    admin_msg = (
+        f"🚨 *New Facebook 2FA Task Submission!*\n\n"
+        f"👤 User: @{user.username or 'None'} (`{chat_id}`)\n"
+        f"🆔 UID: `{uid}`\n"
+        f"🔑 2FA Key: `{key}`\n"
+        f"⏳ Report Time Window: 30 Minutes"
+    )
 
-        bot.send_message(chat_id, f"✅ আপনার পেমেন্ট রিকুয়েস্ট সফলভাবে সাবমিট হয়েছে! খুব শীঘ্রই পেমেন্ট পাঠিয়ে দেওয়া হবে।")
-        return
+    approval_markup = types.InlineKeyboardMarkup(row_width=2)
+    approval_markup.add(
+        types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{chat_id}"),
+        types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{chat_id}"),
+    )
 
-    # Normal Menu Handling
-    if text == "💰 Balance":
-        bot.send_message(chat_id, f"💰 Your Current Balance: *${user['balance']:.2f}*")
-        
-    elif text == "🚀 Start Work":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        btn_fb = types.InlineKeyboardButton("📘 1. Facebook Task", callback_data="task_facebook_menu")
-        btn_ig = types.InlineKeyboardButton("📸 2. Instagram Task", callback_data="task_instagram_menu")
-        btn_gmail = types.InlineKeyboardButton("✉️ 3. Gmail Task", callback_data="task_gmail_menu")
-        markup.add(btn_fb, btn_ig, btn_gmail)
-        bot.send_message(chat_id, "🚀 *Select a Category to Start Working:*", reply_markup=markup)
-        
-    elif text == "💸 Withdraw":
-        if user["balance"] < 0.20:
-            bot.send_message(chat_id, "⚠️ উইথড্র করার জন্য আপনার পর্যাপ্ত ব্যালেন্স নেই। ন্যূনতম ব্যালেন্স হতে হবে **$0.20 (20 সেন্ট)**।")
-        else:
-            markup = types.InlineKeyboardMarkup(row_width=1)
-            markup.add(
-                types.InlineKeyboardButton("💳 Bkash", callback_data="withdraw_bkash"),
-                types.InlineKeyboardButton("🟡 Binance", callback_data="withdraw_binance"),
-                types.InlineKeyboardButton("🔗 BEP20 Address", callback_data="withdraw_bep20"),
-                types.InlineKeyboardButton("❌ Cancel", callback_data="cancel_process")
-            )
-            bot.send_message(chat_id, f"💸 *Withdrawal Menu*\nYour Balance: *${user['balance']:.2f}*\nPlease select your payout method:", reply_markup=markup)
-        
-    elif text == "👥 Referrals":
-        ref_link = f"https://t.me/YourBotUsername?start={message.from_user.id}"
-        ref_text = (
-            "👥 *Referral Program*\n\n"
-            "Invite friends and earn a **20% lifetime commission** on their task earnings!\n\n"
-            f"🔗 *Your Referral Link:*\n`{ref_link}`\n\n"
-            f"📊 Total Referrals: {user['referrals']}\n"
-            f"💰 Total Commission Earned: ${user['ref_earnings']:.3f}"
-        )
-        bot.send_message(chat_id, ref_text)
-        
-    elif text == "🏆 Leaderboard":
-        lb_text = (
-            "🏆 *Referral Earnings Leaderboard* 🏆\n\n"
-            "কোনো রেফারাল ডাটা পাওয়া যায়নি।"
-        )
-        bot.send_message(chat_id, lb_text)
-        
-    elif text == "📊 Statistics":
-        stats_text = (
-            "📊 *Your Work Statistics*\n\n"
-            f"📝 Total Submitted: {user['total_submitted']}\n"
-            f"✅ Total Success: {user['total_success']}\n"
-            f"⏳ Review Pending: {user['review_pending']}\n"
-            f"❌ Admin Rejected: {user['admin_rejected']}\n"
-            f"🤖 Bot Rejected: {user['bot_rejected']}\n\n"
-            "_Note: Report time for tasks is within 30 minutes._"
-        )
-        bot.send_message(chat_id, stats_text)
-        
-    elif text == "🎧 Support":
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("🧑‍💻 Admin Support", url="https://t.me/sacrifice_no"))
-        support_text = (
-            "🎧 *Customer Support*\n\n"
-            "For any help, issues, or inquiries, please click the button below to contact our support admin:"
-        )
-        bot.send_message(chat_id, support_text, reply_markup=markup)
-        
-    elif text == "📁 Help":
-        help_text = "🤖 বট ব্যবহার করতে নিচের মেনু অপশনগুলো ব্যবহার করুন।"
-        bot.send_message(chat_id, help_text)
+    bot.send_message(
+        ADMIN_CHAT_ID,
+        admin_msg,
+        parse_mode="Markdown",
+        reply_markup=approval_markup,
+    )
+    bot.send_message(
+        chat_id,
+        "✅ *Facebook 2FA Account Submitted!*\n⏳ An admin will review it within 30 minutes.",
+        parse_mode="Markdown",
+        reply_markup=get_main_menu(),
+    )
+    return
+
+  elif state == "WAITING_FB_COOKIES_UID":
+    user_data[chat_id]["temp_uid"] = text
+    user_data[chat_id]["state"] = "WAITING_FB_COOKIES_DATA"
+    bot.send_message(
+        chat_id,
+        "🍪 Please paste your Facebook Cookies (JSON string):",
+        reply_markup=get_cancel_markup(),
+    )
+    return
+
+  elif state == "WAITING_FB_COOKIES_DATA":
+    uid = user_data[chat_id].get("temp_uid")
+    cookies = text
+    user_data[chat_id]["state"] = None
+
+    user_data[chat_id]["total_submitted"] += 1
+    user_data[chat_id]["review_pending"] += 1
+
+    admin_msg = (
+        f"🚨 *New Facebook Cookies Task Submission!*\n\n"
+        f"👤 User: @{user.username or 'None'} (`{chat_id}`)\n"
+        f"🆔 UID: `{uid}`\n"
+        f"🍪 Cookies: `{cookies}`\n"
+        f"⏳ Report Time Window: 30 Minutes"
+    )
+
+    approval_markup = types.InlineKeyboardMarkup(row_width=2)
+    approval_markup.add(
+        types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{chat_id}"),
+        types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{chat_id}"),
+    )
+
+    bot.send_message(
+        ADMIN_CHAT_ID,
+        admin_msg,
+        parse_mode="Markdown",
+        reply_markup=approval_markup,
+    )
+    bot.send_message(
+        chat_id,
+        "✅ *Facebook Cookies Submitted!*\n⏳ An admin will review it within 30 minutes.",
+        parse_mode="Markdown",
+        reply_markup=get_main_menu(),
+    )
+    return
+
+  elif state == "WAITING_IG_2FA_KEY":
+    key = text
+    user_data[chat_id]["state"] = None
+
+    user_data[chat_id]["total_submitted"] += 1
+    user_data[chat_id]["review_pending"] += 1
+
+    admin_msg = (
+        f"🚨 *New Instagram 2FA Task Submission!*\n\n"
+        f"👤 User: @{user.username or 'None'} (`{chat_id}`)\n"
+        f"🔑 2FA Key: `{key}`\n"
+        f"⏳ Report Time Window: 30 Minutes"
+    )
+
+    approval_markup = types.InlineKeyboardMarkup(row_width=2)
+    approval_markup.add(
+        types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{chat_id}"),
+        types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{chat_id}"),
+    )
+
+    bot.send_message(
+        ADMIN_CHAT_ID,
+        admin_msg,
+        parse_mode="Markdown",
+        reply_markup=approval_markup,
+    )
+    bot.send_message(
+        chat_id,
+        "✅ *Instagram 2FA Submitted!*\n⏳ An admin will review it within 30 minutes.",
+        parse_mode="Markdown",
+        reply_markup=get_main_menu(),
+    )
+    return
+
+  elif state == "WAITING_WITHDRAW_DETAILS":
+    method = user_data[chat_id].get("withdraw_method")
+    details = text
+    user_data[chat_id]["state"] = None
+
+    admin_msg = (
+        f"💸 *New Withdrawal Request!*\n\n"
+        f"👤 User: @{user.username or 'None'} (`{chat_id}`)\n"
+        f"💳 Method: {method}\n"
+        f"📋 Details: `{details}`"
+    )
+
+    approval_markup = types.InlineKeyboardMarkup(row_width=2)
+    approval_markup.add(
+        types.InlineKeyboardButton(
+            "✅ Approve Payout", callback_data=f"wd_app_{chat_id}"
+        ),
+        types.InlineKeyboardButton(
+            "❌ Reject Payout", callback_data=f"wd_rej_{chat_id}"
+        ),
+    )
+
+    bot.send_message(
+        ADMIN_CHAT_ID,
+        admin_msg,
+        parse_mode="Markdown",
+        reply_markup=approval_markup,
+    )
+    bot.send_message(
+        chat_id,
+        "✅ Withdrawal request submitted successfully! Admin will process it soon.",
+        reply_markup=get_main_menu(),
+    )
+    return
+
+  # Main Menu Options Handlers
+  if text == "🚀 Start Work":
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton(
+            "📘 1. Facebook Task", callback_data="task_facebook"
+        ),
+        types.InlineKeyboardButton(
+            "📷 2. Instagram Task", callback_data="task_instagram"
+        ),
+        types.InlineKeyboardButton(
+            "📧 3. Gmail Task (Coming Soon)", callback_data="task_gmail"
+        ),
+    )
+    bot.send_message(
+        chat_id, "📌 Please select a category to start working:", reply_markup=markup
+    )
+
+  elif text == "💰 Balance":
+    bal = user_data[chat_id]["balance"]
+    bot.send_message(
+        chat_id, f"💰 Your Current Balance: *${bal:.2f}*", parse_mode="Markdown"
+    )
+
+  elif text == "💸 Withdraw":
+    bal = user_data[chat_id]["balance"]
+    if bal < 0.20:
+      bot.send_message(
+          chat_id,
+          "⚠️ Insufficient balance for withdrawal. Minimum balance must be *$0.20*.",
+          parse_mode="Markdown",
+      )
     else:
-        bot.send_message(chat_id, "দয়া করে নিচের মেনু থেকে একটি অপশন বেছে নিন।")
+      markup = types.InlineKeyboardMarkup(row_width=1)
+      markup.add(
+          types.InlineKeyboardButton("Bkash", callback_data="wd_bkash"),
+          types.InlineKeyboardButton("Binance", callback_data="wd_binance"),
+          types.InlineKeyboardButton("BEP20 Address", callback_data="wd_bep20"),
+      )
+      bot.send_message(
+          chat_id, "💳 Please select your payout method:", reply_markup=markup
+      )
+
+  elif text == "👥 Referrals":
+    ref_count = user_data[chat_id]["referrals"]
+    comm = user_data[chat_id]["commission"]
+    ref_link = f"https://t.me/{bot.get_me().username}?start={chat_id}"
+    ref_text = (
+        f"👥 *Referral Program*\n\n"
+        f"Invite friends and earn a *20% lifetime commission* on their task earnings!\n\n"
+        f"🔗 Your Referral Link:\n`{ref_link}`\n\n"
+        f"📊 Total Referrals: {ref_count}\n"
+        f"💰 Total Commission Earned: ${comm:.3f}"
+    )
+    bot.send_message(chat_id, ref_text, parse_mode="Markdown")
+
+  elif text == "🏆 Leaderboard":
+    lb_text = "🏆 *Referral Earnings Leaderboard*\n\nNo records yet."
+    bot.send_message(chat_id, lb_text, parse_mode="Markdown")
+
+  elif text == "📊 Statistics":
+    u = user_data[chat_id]
+    stats_text = (
+        f"📊 *Your Work Statistics*\n\n"
+        f"📝 Total Submitted: {u['total_submitted']}\n"
+        f"✅ Total Success: {u['total_success']}\n"
+        f"⏳ Review Pending: {u['review_pending']}\n"
+        f"❌ Admin Rejected: {u['admin_rejected']}\n"
+        f"🤖 Bot Rejected: {u['bot_rejected']}"
+    )
+    bot.send_message(chat_id, stats_text, parse_mode="Markdown")
+
+  elif text == "🎧 Support":
+    bot.send_message(
+        chat_id,
+        f"🎧 For any help or issues, contact our support admin:\n👉 {SUPPORT_USERNAME}",
+    )
+
+  elif text == "❓ Help":
+    bot.send_message(
+        chat_id,
+        "ℹ️ Click *Start Work* to do tasks, submit required details, and earn rewards!",
+        parse_mode="Markdown",
+    )
+
 
 @bot.callback_query_handler(func=lambda call: True)
-def handle_callbacks(call):
-    chat_id = call.message.chat.id
-    user = get_user(chat_id)
-    
-    if call.data == "task_facebook_menu":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        markup.add(
-            types.InlineKeyboardButton("🔑 Fb 2FA Task", callback_data="task_fb_2fa"),
-            types.InlineKeyboardButton("🍪 Fb Cookies Task", callback_data="task_fb_cookies"),
-            types.InlineKeyboardButton("⬅️ Back", callback_data="back_to_work")
-        )
-        bot.edit_message_text("📘 *Facebook Task Options:*", chat_id, call.message.message_id, reply_markup=markup)
+def handle_callback(call):
+  chat_id = call.message.chat.id
+  data = call.data
 
-    elif call.data == "task_instagram_menu":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        markup.add(
-            types.InlineKeyboardButton("📸 Instagram 2FA Task", callback_data="task_ig_2fa"),
-            types.InlineKeyboardButton("⬅️ Back", callback_data="back_to_work")
-        )
-        bot.edit_message_text("📸 *Instagram Task Options:*", chat_id, call.message.message_id, reply_markup=markup)
+  if data.startswith("app_"):
+    target_user = data.split("_")[1]
+    bot.answer_callback_query(call.id, "Task Approved Successfully!")
+    bot.edit_message_text(
+        call.message.text + "\n\n✅ *STATUS: APPROVED BY ADMIN*",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="Markdown",
+    )
+    try:
+      bot.send_message(
+          int(target_user),
+          "🎉 Your submitted task has been approved by the admin and verified!",
+      )
+    except:
+      pass
+    return
 
-    elif call.data == "task_gmail_menu":
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("⬅️ Back", callback_data="back_to_work"))
-        bot.edit_message_text("✉️ *Gmail Task*\n\nGmail option is active. New tasks will be added soon!", chat_id, call.message.message_id, reply_markup=markup)
+  elif data.startswith("rej_"):
+    target_user = data.split("_")[1]
+    bot.answer_callback_query(call.id, "Task Rejected!")
+    bot.edit_message_text(
+        call.message.text + "\n\n❌ *STATUS: REJECTED BY ADMIN*",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="Markdown",
+    )
+    try:
+      bot.send_message(
+          int(target_user),
+          "❌ Your submitted task was rejected by the admin. Please try again"
+          " correctly.",
+      )
+    except:
+      pass
+    return
 
-    elif call.data == "task_fb_2fa":
-        name, password = generate_random_credentials()
-        user["state"] = "waiting_for_fb_2fa_key"
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_process"))
-        
-        task_info = (
-            "🔑 *Facebook 2FA Task*\n\n"
-            f"👤 Name: `{name}`\n"
-            f"🔑 Password: `{password}`\n\n"
-            "1️⃣ Create a Facebook account using these details.\n"
-            "2️⃣ Enable 2FA and get the setup key.\n"
-            "⚠️ *Report Time: 30 minutes*\n\n"
-            "👉 Please paste your 2FA Setup Key:"
-        )
-        bot.send_message(chat_id, task_info, reply_markup=markup)
-        bot.answer_callback_query(call.id)
+  elif data.startswith("wd_app_"):
+    target_user = data.split("_")[2]
+    bot.answer_callback_query(call.id, "Payout Approved!")
+    bot.edit_message_text(
+        call.message.text + "\n\n✅ *STATUS: PAYOUT APPROVED*",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="Markdown",
+    )
+    try:
+      bot.send_message(
+          int(target_user),
+          "🎉 Your withdrawal request has been approved and paid by the admin!",
+      )
+    except:
+      pass
+    return
 
-    elif call.data == "task_fb_cookies":
-        name, password = generate_random_credentials()
-        user["state"] = "waiting_for_fb_cookies_uid"
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_process"))
-        
-        task_info = (
-            "🍪 *Facebook Cookies Task*\n\n"
-            f"👤 Name: `{name}`\n"
-            f"🔑 Password: `{password}`\n\n"
-            "1️⃣ Create a Facebook account using these details.\n"
-            "⚠️ *Report Time: 30 minutes*\n\n"
-            "👉 First, please provide your Facebook UID:"
-        )
-        bot.send_message(chat_id, task_info, reply_markup=markup)
-        bot.answer_callback_query(call.id)
+  elif data.startswith("wd_rej_"):
+    target_user = data.split("_")[2]
+    bot.answer_callback_query(call.id, "Payout Rejected!")
+    bot.edit_message_text(
+        call.message.text + "\n\n❌ *STATUS: PAYOUT REJECTED*",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="Markdown",
+    )
+    try:
+      bot.send_message(
+          int(target_user),
+          "❌ Your withdrawal request was rejected by the admin.",
+      )
+    except:
+      pass
+    return
 
-    elif call.data == "task_ig_2fa":
-        username = f"user_{random.randint(10000, 99999)}"
-        _, password = generate_random_credentials()
-        user["state"] = "waiting_for_ig_2fa"
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_process"))
-        
-        task_info = (
-            "📸 *Instagram 2FA Task*\n\n"
-            f"👤 Username: `{username}`\n"
-            f"🔑 Password: `{password}`\n\n"
-            "1️⃣ Create an Instagram account using these details.\n"
-            "⚠️ *Report Time: 30 minutes*\n\n"
-            "👉 Please provide your 2FA Key:"
-        )
-        bot.send_message(chat_id, task_info, reply_markup=markup)
-        bot.answer_callback_query(call.id)
+  if data == "task_facebook":
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton(
+            "🔑 Fb 2FA Task", callback_data="fb_task_2fa"
+        ),
+        types.InlineKeyboardButton(
+            "🍪 Fb Cookies Task", callback_data="fb_task_cookies"
+        ),
+    )
+    bot.edit_message_text(
+        "📂 Choose Facebook Task Type:",
+        chat_id,
+        call.message.message_id,
+        reply_markup=markup,
+    )
 
-    elif call.data.startswith("withdraw_"):
-        method = call.data.split("_")[1].upper()
-        user["withdraw_method"] = method
-        user["state"] = "waiting_for_withdraw_details"
-        bot.answer_callback_query(call.id, f"Selected {method}")
-        bot.send_message(chat_id, f"✅ You selected *{method}* for withdrawal.\nلطفاً আপনার পেমেন্ট অ্যাকাউন্ট ডিটেইলস (নম্বর বা ওয়ালেট অ্যাড্রেস) সেন্ড করুন:")
+  elif data == "fb_task_2fa":
+    user_data[chat_id]["state"] = "WAITING_FB_2FA_UID"
+    bot.send_message(
+        chat_id,
+        "👤 Generated Name & Pass: `TaskUser_99 / P@ssw0rd123`\n\n🆔 Please"
+        " provide your Facebook UID:",
+        parse_mode="Markdown",
+        reply_markup=get_cancel_markup(),
+    )
 
-    elif call.data == "cancel_process":
-        user["state"] = None
-        bot.answer_callback_query(call.id, "Process Cancelled")
-        bot.send_message(chat_id, "❌ Process Cancelled. Use the keyboard below to continue.")
-        
-    elif call.data == "back_to_work":
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        markup.add(
-            types.InlineKeyboardButton("📘 1. Facebook Task", callback_data="task_facebook_menu"),
-            types.InlineKeyboardButton("📸 2. Instagram Task", callback_data="task_instagram_menu"),
-            types.InlineKeyboardButton("✉️ 3. Gmail Task", callback_data="task_gmail_menu")
-        )
-        bot.edit_message_text("🚀 *Select a Category to Start Working:*", chat_id, call.message.message_id, reply_markup=markup)
+  elif data == "fb_task_cookies":
+    user_data[chat_id]["state"] = "WAITING_FB_COOKIES_UID"
+    bot.send_message(
+        chat_id,
+        "👤 Generated Name & Pass: `CookieUser_55 / SecurePass789`\n\n🆔 Please"
+        " provide your Facebook UID:",
+        parse_mode="Markdown",
+        reply_markup=get_cancel_markup(),
+    )
 
-if __name__ == '__main__':
-    print("Bot is starting up cleanly with Admin notifications...")
-    bot.infinity_polling()
+  elif data == "task_instagram":
+    user_data[chat_id]["state"] = "WAITING_IG_2FA_KEY"
+    bot.send_message(
+        chat_id,
+        "📸 Instagram 2FA Task\n👤 Username & Pass: `ig_worker_bot /"
+        " Pass12345`\n\n🔑 Please provide your 2FA Key:",
+        parse_mode="Markdown",
+        reply_markup=get_cancel_markup(),
+    )
+
+  elif data == "task_gmail":
+    bot.answer_callback_query(
+        call.id,
+        "Gmail tasks will be available soon! Stay tuned.",
+        show_alert=True,
+    )
+
+  elif data in ["wd_bkash", "wd_binance", "wd_bep20"]:
+    method = data.replace("wd_", "").upper()
+    user_data[chat_id]["withdraw_method"] = method
+    user_data[chat_id]["state"] = "WAITING_WITHDRAW_DETAILS"
+    bot.send_message(
+        chat_id,
+        f"✅ You selected {method}.\n📱 Please send your payout account details"
+        " (Number or Wallet Address):",
+        reply_markup=get_cancel_markup(),
+    )
+
+
+if __name__ == "__main__":
+  print("Bot is running...")
+  bot.infinity_polling()
