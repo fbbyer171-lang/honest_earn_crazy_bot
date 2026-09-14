@@ -12,12 +12,12 @@ user_data = {}
 def get_user(chat_id):
     if chat_id not in user_data:
         user_data[chat_id] = {
-            "balance": 0.,
-            "total_submitted": ,
-            "total_success": ,
-            "review_pending": ,
-            "admin_rejected": ,
-            "bot_rejected": ,
+            "balance": 0.90,
+            "total_submitted": 43,
+            "total_success": 28,
+            "review_pending": 3,
+            "admin_rejected": 12,
+            "bot_rejected": 12,
             "state": None,
             "sub_state": None,
             "task_data": {}
@@ -66,8 +66,8 @@ def handle_messages(message):
     
     # State Handling for Inputs
     state = user.get("state")
-    sub_state = user.get("sub_state")
     
+    # 1. Facebook 2FA Task Flow
     if state == "waiting_for_fb_2fa_key":
         user["task_data"]["2fa_key"] = text
         user["state"] = "waiting_for_fb_2fa_uid"
@@ -79,39 +79,38 @@ def handle_messages(message):
     elif state == "waiting_for_fb_2fa_uid":
         user["task_data"]["uid"] = text
         user["state"] = None
-        user["sub_state"] = None
         user["total_submitted"] += 1
         user["review_pending"] += 1
         user["balance"] += 0.05
-        bot.send_message(chat_id, "✅ *Facebook 2FA Task Submitted Successfully!*\n⏳ Review time: within 30 minutes.")
+        bot.send_message(chat_id, "✅ *Facebook 2FA Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
         return
 
+    # 2. Facebook Cookies Task Flow
     elif state == "waiting_for_fb_cookies_uid":
         user["task_data"]["uid"] = text
         user["state"] = "waiting_for_fb_cookies_string"
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_process"))
-        bot.send_message(chat_id, "🍪 Please paste your Facebook Cookies JSON string:", reply_markup=markup)
+        bot.send_message(chat_id, "🍪 Please paste your Facebook Cookies string/JSON:", reply_markup=markup)
         return
 
     elif state == "waiting_for_fb_cookies_string":
         user["task_data"]["cookies"] = text
         user["state"] = None
-        user["sub_state"] = None
         user["total_submitted"] += 1
         user["review_pending"] += 1
         user["balance"] += 0.049
-        bot.send_message(chat_id, "✅ *Facebook Cookies Task Submitted Successfully!*\n⏳ Review time: within 30 minutes.")
+        bot.send_message(chat_id, "✅ *Facebook Cookies Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
         return
 
+    # 3. Instagram 2FA Task Flow
     elif state == "waiting_for_ig_2fa":
         user["task_data"]["ig_2fa"] = text
         user["state"] = None
-        user["sub_state"] = None
         user["total_submitted"] += 1
         user["review_pending"] += 1
         user["balance"] += 0.045
-        bot.send_message(chat_id, "✅ *Instagram 2FA Task Submitted Successfully!*\n⏳ Review time: within 30 minutes.")
+        bot.send_message(chat_id, "✅ *Instagram 2FA Task Submitted Successfully!*\n⏳ Report time: within 30 minutes.")
         return
 
     # Normal Menu Handling
@@ -123,8 +122,7 @@ def handle_messages(message):
         btn_fb = types.InlineKeyboardButton("📘 1. Facebook Task", callback_data="task_facebook_menu")
         btn_ig = types.InlineKeyboardButton("📸 2. Instagram Task", callback_data="task_instagram_menu")
         btn_gmail = types.InlineKeyboardButton("✉️ 3. Gmail Task", callback_data="task_gmail_menu")
-        btn_back = types.InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_home")
-        markup.add(btn_fb, btn_ig, btn_gmail, btn_back)
+        markup.add(btn_fb, btn_ig, btn_gmail)
         bot.send_message(chat_id, "🚀 *Select a Category to Start Working:*", reply_markup=markup)
         
     elif text == "💸 Withdraw":
@@ -191,11 +189,7 @@ def handle_messages(message):
         bot.send_message(chat_id, support_text, reply_markup=markup)
         
     elif text == "📁 Help":
-        help_text = (
-            "🤖 *Help & Guidelines*\n"
-            "Select **Start Work** from the keyboard menu to begin tasks. Complete instructions are provided in each task category.\n"
-            "Report time: 30 minutes."
-        )
+        help_text = "🤖 বট ব্যবহার করতে নিচের মেনু অপশনগুলো ব্যবহার করুন।"
         bot.send_message(chat_id, help_text)
     else:
         bot.send_message(chat_id, "দয়া করে নিচের মেনু থেকে একটি অপশন বেছে নিন।")
@@ -225,7 +219,7 @@ def handle_callbacks(call):
     elif call.data == "task_gmail_menu":
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("⬅️ Back", callback_data="back_to_work"))
-        bot.edit_message_text("✉️ *Gmail Task*\n\nGmail options are currently closed. New tasks will be added soon!", chat_id, call.message.message_id, reply_markup=markup)
+        bot.edit_message_text("✉️ *Gmail Task*\n\nGmail options are currently active. New tasks will be added soon!", chat_id, call.message.message_id, reply_markup=markup)
 
     elif call.data == "task_fb_2fa":
         name, password = generate_random_credentials()
@@ -238,7 +232,7 @@ def handle_callbacks(call):
             f"👤 Name: `{name}`\n"
             f"🔑 Password: `{password}`\n\n"
             "1️⃣ Create a Facebook account using these details.\n"
-            "2️⃣ Enable 2FA and get the Base32 setup key.\n"
+            "2️⃣ Enable 2FA and get the setup key.\n"
             "⚠️ *Report Time: 30 minutes*\n\n"
             "👉 Please provide your 2FA Key:"
         )
@@ -263,14 +257,15 @@ def handle_callbacks(call):
         bot.answer_callback_query(call.id)
 
     elif call.data == "task_ig_2fa":
-        name, password = generate_random_credentials()
+        username = f"user_{random.randint(10000, 99999)}"
+        _, password = generate_random_credentials()
         user["state"] = "waiting_for_ig_2fa"
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("❌ Cancel Process", callback_data="cancel_process"))
         
         task_info = (
             "📸 *Instagram 2FA Task*\n\n"
-            f"👤 Username: `user_{random.randint(10000, 99999)}`\n"
+            f"👤 Username: `{username}`\n"
             f"🔑 Password: `{password}`\n\n"
             "1️⃣ Create an Instagram account using these details.\n"
             "⚠️ *Report Time: 30 minutes*\n\n"
@@ -282,11 +277,10 @@ def handle_callbacks(call):
     elif call.data.startswith("withdraw_"):
         method = call.data.split("_")[1].upper()
         bot.answer_callback_query(call.id, f"Selected {method}")
-        bot.send_message(chat_id, f"✅ You selected *{method}* for withdrawal.\nلطفاً আপনার পেমেন্ট অ্যাকাউন্ট ডিটেইলস (যেমন নম্বর বা অ্যাড্রেস) সেন্ড করুন:")
+        bot.send_message(chat_id, f"✅ You selected *{method}* for withdrawal.\nلطفاً আপনার পেমেন্ট অ্যাকাউন্ট ডিটেইলস (নম্বর বা ওয়ালেট অ্যাড্রেস) সেন্ড করুন:")
 
     elif call.data == "cancel_process":
         user["state"] = None
-        user["sub_state"] = None
         bot.answer_callback_query(call.id, "Process Cancelled")
         bot.send_message(chat_id, "❌ Process Cancelled. Use the keyboard below to continue.")
         
@@ -295,18 +289,10 @@ def handle_callbacks(call):
         markup.add(
             types.InlineKeyboardButton("📘 1. Facebook Task", callback_data="task_facebook_menu"),
             types.InlineKeyboardButton("📸 2. Instagram Task", callback_data="task_instagram_menu"),
-            types.InlineKeyboardButton("✉️ 3. Gmail Task", callback_data="task_gmail_menu"),
-            types.InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_home")
+            types.InlineKeyboardButton("✉️ 3. Gmail Task", callback_data="task_gmail_menu")
         )
         bot.edit_message_text("🚀 *Select a Category to Start Working:*", chat_id, call.message.message_id, reply_markup=markup)
 
-    elif call.data == "back_home":
-        user["state"] = None
-        user["sub_state"] = None
-        bot.answer_callback_query(call.id, "Returning...")
-        bot.send_message(chat_id, "মূল মেনুতে ফিরে এসেছেন।")
-
 if __name__ == '__main__':
-    print("Bot is starting up with updated tasks...")
+    print("Bot is starting up cleanly...")
     bot.infinity_polling()
-```json
