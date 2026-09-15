@@ -1,6 +1,4 @@
 import logging
-import random
-import string
 import telebot
 from telebot import types
 
@@ -15,12 +13,15 @@ logging.basicConfig(level=logging.INFO)
 
 user_data = {}
 
+# এখানে আপনার নির্দিষ্ট আইডি, ইউজারনেম এবং পাসওয়ার্ডগুলো সেট করে দিন (যা দিয়ে আপনি বিক্রি বা কাজ করাবেন)
+PRESET_FB_2FA_USER = "TaskUser_Official_01"
+PRESET_FB_2FA_PASS = "Pass_Abc12345"
 
-def generate_random_credentials(prefix="User"):
-  rand_num = random.randint(100, 999)
-  letters = string.ascii_letters + string.digits
-  rand_pass = "".join(random.choice(letters) for i in range(8))
-  return f"{prefix}_{rand_num}", f"Pass_{rand_pass}"
+PRESET_FB_COOKIE_USER = "CookieUser_Sell_01"
+PRESET_FB_COOKIE_PASS = "Pass_Xyz98765"
+
+PRESET_IG_USER = "ig_worker_bot"
+PRESET_IG_PASS = "Pass12345"
 
 
 def get_main_menu():
@@ -473,31 +474,28 @@ def handle_callback(call):
 
   elif data == "fb_task_2fa":
     user_data[chat_id]["state"] = "WAITING_FB_2FA_UID"
-    uname, upass = generate_random_credentials("FB_2FA")
     bot.send_message(
         chat_id,
-        f"👤 Generated Name & Pass: {uname} / {upass}\n\n🆔 Please provide"
-        " your Facebook UID:",
+        f"👤 Account Details to Login:\nUsername: {PRESET_FB_2FA_USER}\nPassword:"
+        f" {PRESET_FB_2FA_PASS}\n\n🆔 Please provide your Facebook UID:",
         reply_markup=get_cancel_markup(),
     )
 
   elif data == "fb_task_cookies":
     user_data[chat_id]["state"] = "WAITING_FB_COOKIES_UID"
-    uname, upass = generate_random_credentials("FB_Cookie")
     bot.send_message(
         chat_id,
-        f"👤 Generated Name & Pass: {uname} / {upass}\n\n🆔 Please provide"
-        " your Facebook UID:",
+        f"👤 Account Details to Login:\nUsername: {PRESET_FB_COOKIE_USER}\nPassword:"
+        f" {PRESET_FB_COOKIE_PASS}\n\n🆔 Please provide your Facebook UID:",
         reply_markup=get_cancel_markup(),
     )
 
   elif data == "task_instagram":
     user_data[chat_id]["state"] = "WAITING_IG_2FA_KEY"
-    uname, upass = generate_random_credentials("IG_User")
     bot.send_message(
         chat_id,
-        f"📸 Instagram 2FA Task\n👤 Username & Pass: {uname} /"
-        f" {upass}\n\n🔑 Please provide your 2FA Key:",
+        f"📸 Instagram 2FA Task\n👤 Username & Pass: {PRESET_IG_USER} /"
+        f" {PRESET_IG_PASS}\n\n🔑 Please provide your 2FA Key:",
         reply_markup=get_cancel_markup(),
     )
 
