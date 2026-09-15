@@ -1,4 +1,6 @@
 import logging
+import random
+import string
 import telebot
 from telebot import types
 
@@ -13,15 +15,12 @@ logging.basicConfig(level=logging.INFO)
 
 user_data = {}
 
-# এখানে আপনার নির্দিষ্ট আইডি, ইউজারনেম এবং পাসওয়ার্ডগুলো সেট করে দিন (যা দিয়ে আপনি বিক্রি বা কাজ করাবেন)
-PRESET_FB_2FA_USER = "TaskUser_Official_01"
-PRESET_FB_2FA_PASS = "Pass_Abc12345"
 
-PRESET_FB_COOKIE_USER = "CookieUser_Sell_01"
-PRESET_FB_COOKIE_PASS = "Pass_Xyz98765"
-
-PRESET_IG_USER = "ig_worker_bot"
-PRESET_IG_PASS = "Pass12345"
+def generate_random_credentials(prefix="User"):
+  rand_num = random.randint(1000, 9999)
+  letters = string.ascii_letters + string.digits
+  rand_pass = "".join(random.choice(letters) for i in range(8))
+  return f"{prefix}_{rand_num}", f"Pass_{rand_pass}"
 
 
 def get_main_menu():
@@ -112,6 +111,7 @@ def handle_messages(message):
     )
     return
 
+  # --- Facebook 2FA Flow ---
   if state == "WAITING_FB_2FA_UID":
     user_data[chat_id]["temp_uid"] = text
     user_data[chat_id]["state"] = "WAITING_FB_2FA_KEY"
@@ -125,6 +125,8 @@ def handle_messages(message):
   elif state == "WAITING_FB_2FA_KEY":
     uid = user_data[chat_id].get("temp_uid")
     key = text
+    gen_user = user_data[chat_id].get("gen_user", "N/A")
+    gen_pass = user_data[chat_id].get("gen_pass", "N/A")
     user_data[chat_id]["state"] = None
 
     user_data[chat_id]["total_submitted"] += 1
@@ -132,9 +134,11 @@ def handle_messages(message):
 
     admin_msg = (
         f"🚨 New Facebook 2FA Task Submission!\n\n"
-        f"👤 User: @{user.username or 'None'} ({chat_id})\n"
+        f"👤 Worker: @{user.username or 'None'} ({chat_id})\n"
+        f"🔑 Generated Username: {gen_user}\n"
+        f"🔒 Generated Password: {gen_pass}\n"
         f"🆔 UID: {uid}\n"
-        f"🔑 2FA Key: {key}\n"
+        f"🛡️ 2FA Key: {key}\n"
         f"⏳ Report Time Window: 30 Minutes"
     )
 
@@ -153,12 +157,13 @@ def handle_messages(message):
 
     bot.send_message(
         chat_id,
-        "✅ Facebook 2FA Account Submitted!\n⏳ An admin will review it within"
-        " 30 minutes.",
+        "✅ Facebook 2FA Account Submitted Successfully!\n⏳ An admin will"
+        " review it within 30 minutes.",
         reply_markup=get_main_menu(),
     )
     return
 
+  # --- Facebook Cookies Flow ---
   elif state == "WAITING_FB_COOKIES_UID":
     user_data[chat_id]["temp_uid"] = text
     user_data[chat_id]["state"] = "WAITING_FB_COOKIES_DATA"
@@ -172,6 +177,8 @@ def handle_messages(message):
   elif state == "WAITING_FB_COOKIES_DATA":
     uid = user_data[chat_id].get("temp_uid")
     cookies = text
+    gen_user = user_data[chat_id].get("gen_user", "N/A")
+    gen_pass = user_data[chat_id].get("gen_pass", "N/A")
     user_data[chat_id]["state"] = None
 
     user_data[chat_id]["total_submitted"] += 1
@@ -179,7 +186,9 @@ def handle_messages(message):
 
     admin_msg = (
         f"🚨 New Facebook Cookies Task Submission!\n\n"
-        f"👤 User: @{user.username or 'None'} ({chat_id})\n"
+        f"👤 Worker: @{user.username or 'None'} ({chat_id})\n"
+        f"🔑 Generated Username: {gen_user}\n"
+        f"🔒 Generated Password: {gen_pass}\n"
         f"🆔 UID: {uid}\n"
         f"🍪 Cookies: {cookies}\n"
         f"⏳ Report Time Window: 30 Minutes"
@@ -200,14 +209,17 @@ def handle_messages(message):
 
     bot.send_message(
         chat_id,
-        "✅ Facebook Cookies Submitted!\n⏳ An admin will review it within 30"
-        " minutes.",
+        "✅ Facebook Cookies Submitted Successfully!\n⏳ An admin will review it"
+        " within 30 minutes.",
         reply_markup=get_main_menu(),
     )
     return
 
+  # --- Instagram 2FA Flow ---
   elif state == "WAITING_IG_2FA_KEY":
     key = text
+    gen_user = user_data[chat_id].get("gen_user", "N/A")
+    gen_pass = user_data[chat_id].get("gen_pass", "N/A")
     user_data[chat_id]["state"] = None
 
     user_data[chat_id]["total_submitted"] += 1
@@ -215,8 +227,10 @@ def handle_messages(message):
 
     admin_msg = (
         f"🚨 New Instagram 2FA Task Submission!\n\n"
-        f"👤 User: @{user.username or 'None'} ({chat_id})\n"
-        f"🔑 2FA Key: {key}\n"
+        f"👤 Worker: @{user.username or 'None'} ({chat_id})\n"
+        f"🔑 Generated Username: {gen_user}\n"
+        f"🔒 Generated Password: {gen_pass}\n"
+        f"🛡️ 2FA Key: {key}\n"
         f"⏳ Report Time Window: 30 Minutes"
     )
 
@@ -235,8 +249,8 @@ def handle_messages(message):
 
     bot.send_message(
         chat_id,
-        "✅ Instagram 2FA Submitted!\n⏳ An admin will review it within 30"
-        " minutes.",
+        "✅ Instagram 2FA Submitted Successfully!\n⏳ An admin will review it"
+        " within 30 minutes.",
         reply_markup=get_main_menu(),
     )
     return
@@ -474,28 +488,47 @@ def handle_callback(call):
 
   elif data == "fb_task_2fa":
     user_data[chat_id]["state"] = "WAITING_FB_2FA_UID"
+    uname, upass = generate_random_credentials("FB_2FA")
+    user_data[chat_id]["gen_user"] = uname
+    user_data[chat_id]["gen_pass"] = upass
     bot.send_message(
         chat_id,
-        f"👤 Account Details to Login:\nUsername: {PRESET_FB_2FA_USER}\nPassword:"
-        f" {PRESET_FB_2FA_PASS}\n\n🆔 Please provide your Facebook UID:",
+        f"👤 Use this details to open account:\n"
+        f"🔹 Username: `{uname}`\n"
+        f"🔹 Password: `{upass}`\n\n"
+        f"🆔 Now, please provide your Facebook UID:",
+        parse_mode="Markdown",
         reply_markup=get_cancel_markup(),
     )
 
   elif data == "fb_task_cookies":
     user_data[chat_id]["state"] = "WAITING_FB_COOKIES_UID"
+    uname, upass = generate_random_credentials("FB_Cookie")
+    user_data[chat_id]["gen_user"] = uname
+    user_data[chat_id]["gen_pass"] = upass
     bot.send_message(
         chat_id,
-        f"👤 Account Details to Login:\nUsername: {PRESET_FB_COOKIE_USER}\nPassword:"
-        f" {PRESET_FB_COOKIE_PASS}\n\n🆔 Please provide your Facebook UID:",
+        f"👤 Use this details to open account:\n"
+        f"🔹 Username: `{uname}`\n"
+        f"🔹 Password: `{upass}`\n\n"
+        f"🆔 Now, please provide your Facebook UID:",
+        parse_mode="Markdown",
         reply_markup=get_cancel_markup(),
     )
 
   elif data == "task_instagram":
     user_data[chat_id]["state"] = "WAITING_IG_2FA_KEY"
+    uname, upass = generate_random_credentials("IG_User")
+    user_data[chat_id]["gen_user"] = uname
+    user_data[chat_id]["gen_pass"] = upass
     bot.send_message(
         chat_id,
-        f"📸 Instagram 2FA Task\n👤 Username & Pass: {PRESET_IG_USER} /"
-        f" {PRESET_IG_PASS}\n\n🔑 Please provide your 2FA Key:",
+        f"📸 Instagram Task\n"
+        f"👤 Use this details to open account:\n"
+        f"🔹 Username: `{uname}`\n"
+        f"🔹 Password: `{upass}`\n\n"
+        f"🔑 Now, please provide your 2FA Key:",
+        parse_mode="Markdown",
         reply_markup=get_cancel_markup(),
     )
 
