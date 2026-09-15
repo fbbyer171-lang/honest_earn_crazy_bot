@@ -4,7 +4,7 @@ from telebot import types
 
 # Bot Configuration
 TOKEN = "8980706201:AAHmK_q9vcStJiTbd-m1HGaDjbYhga3pfps"
-ADMIN_CHAT_ID = 8856278248  # Your Admin Chat ID
+ADMIN_CHAT_ID = 8444176616  # Your Real Admin Chat ID
 SUPPORT_USERNAME = "@sacrifice_no"
 
 # Public Channel Username
@@ -505,4 +505,4 @@ def handle_callback(call):
 
 if __name__ == "__main__":
   print("Bot is running...")
-  bot.infinity_polling()
+  bot.infinity_polling() 
