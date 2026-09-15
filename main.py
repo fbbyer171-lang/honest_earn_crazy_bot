@@ -629,7 +629,11 @@ def handle_callback(call):
           reply_markup=markup,
       )
     except Exception:
-      pass
+      bot.send_message(
+          chat_id,
+          "📌 Please select a category to start working:",
+          reply_markup=markup,
+      )
 
   # --- Hotmail Task Info Screen ---
   elif data == "fb_task_hotmail_info":
