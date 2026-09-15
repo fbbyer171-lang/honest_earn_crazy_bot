@@ -9,7 +9,7 @@ import telebot
 from telebot import types
 
 # Bot Configuration
-TOKEN = "8980706201:AAHmK_q9vcStJiTbd-m1HGaDjbYhga3pfps"
+TOKEN = "8980706201:AAEKtfUROOEPtsO8ZrwjKQ10Nnuan8ZHBrA"
 ADMIN_CHAT_ID = 8444176616
 SUPPORT_USERNAME = "@Owners_honestearnnow790"
 HELP_USERNAME = "@timotyservice"
@@ -734,4 +734,8 @@ def handle_callback(call):
 
 if __name__ == "__main__":
   print("Bot is running...")
+  try:
+    bot.remove_webhook()
+  except Exception:
+    pass
   bot.infinity_polling(skip_pending=True)
