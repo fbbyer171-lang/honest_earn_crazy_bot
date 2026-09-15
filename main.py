@@ -14,10 +14,10 @@ ADMIN_CHAT_ID = 8444176616  # Your Real Admin Chat ID
 SUPPORT_USERNAME = "@Owners_honestearnnow790"
 HELP_USERNAME = "@timotyservice"
 
-# Task Rewards Configuration
+# Task Rewards Configuration (Updated Cookies Rate)
 FB_HOTMAIL_REWARD = 0.08  # Active
 FB_2FA_REWARD = 0.06  # Active
-FB_COOKIES_REWARD = 0.04  # Active
+FB_COOKIES_REWARD = 0.07  # Updated to $0.07
 FB_GMAIL_REWARD = 0.07  # Off / Option only
 FB_COOKIES_30F_REWARD = 0.12  # Off / Option only
 
@@ -95,14 +95,12 @@ def generate_bangladeshi_credentials():
   rand_pass = "".join(random.choice(letters) for i in range(8))
   password = f"Pass_{rand_pass}"
 
-  # Generate random Base32 secret for 2FA
   base32_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
   secret_2fa = "".join(random.choice(base32_chars) for _ in range(16))
 
   return full_name, password, secret_2fa
 
 
-# Function to calculate OTP from 2FA Secret Key
 def get_totp_code(secret_key):
   try:
     key = base64.b32decode(
