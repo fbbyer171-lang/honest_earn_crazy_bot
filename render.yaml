@@ -1,0 +1,6 @@
+services:
+  - type: worker
+    name: honest_earn_crazy_bot
+    runtime: python
+    buildCommand: pip install pyTelegramBotAPI
+    startCommand: python main.py
