@@ -1,7 +1,4 @@
-info_text = (
-        "⏱️ Processing Time: 6-12 Hours\n\n📌 Task: Facebook 2FA (0"
-        " Friend)\n\n📖 Instructions:\n1. Create a Facebook account using these"
-        " details.\n2. Enable 2FA using secret key below.\n\n👤 Name:"
+f" details.\n2. Enable 2FA using secret key below.\n\n👤 Name:"
         f" {uname}\n🔑 Password: {upass}\n🛡️ 2FA Secret Key: {secret_2fa}"
     )
     bot.edit_message_text(
@@ -43,7 +40,7 @@ info_text = (
 
     info_text = (
         "⏱️ Processing Time: 6-12 Hours\n\n📌 Task: Facebook Cookies\n\n📖"
-        " Instructions:\n1. Create FB account.\n2. Extract cookies.\n3. Click"
+        f" Instructions:\n1. Create FB account.\n2. Extract cookies.\n3. Click"
         f" Start Task.\n\n👤 Name: {uname}\n🔑 Password: {upass}"
     )
     bot.edit_message_text(
@@ -81,4 +78,3 @@ if name == "main":
   except Exception:
     pass
   bot.infinity_polling(skip_pending=True)
-   
