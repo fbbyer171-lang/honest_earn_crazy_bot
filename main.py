@@ -9,7 +9,7 @@ import telebot
 from telebot import types
 
 # Bot Configuration
-TOKEN = "8980706201:AAH636FCeRbehXODdsNpaJIf3c7F-wBrM8M"
+TOKEN = "8687487595:AAE68WE7Q98oenRvCIQ1kIYvXtk1MdqIj4U"
 ADMIN_CHAT_ID = 8444176616
 SUPPORT_USERNAME = "@Owners_honestearnnow790"
 HELP_USERNAME = "@timotyservice"
@@ -725,3 +725,4 @@ if __name__ == "__main__":
   except Exception:
     pass
   bot.infinity_polling(skip_pending=True)
+
