@@ -589,7 +589,7 @@ def handle_callback(call):
     bot.send_message(
         chat_id,
         "🆔 Please provide your Facebook UID:",
-        reply_markup=get_cancel_missing := get_cancel_markup(),
+        reply_markup=get_cancel_markup(),
     )
     return
 
