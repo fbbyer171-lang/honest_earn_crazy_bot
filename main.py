@@ -18,8 +18,6 @@ HELP_USERNAME = "@timotyservice"
 FB_HOTMAIL_REWARD = 0.08
 FB_2FA_REWARD = 0.06
 FB_COOKIES_REWARD = 0.07
-FB_GMAIL_REWARD = 0.07
-FB_COOKIES_30F_REWARD = 0.12
 
 bot = telebot.TeleBot(TOKEN)
 logging.basicConfig(level=logging.INFO)
@@ -74,7 +72,6 @@ def get_user(chat_id):
         "admin_rejected": 0,
         "bot_rejected": 0,
         "referrals": 0,
-        "active_referrals": 0,
         "commission": 0.0,
         "state": None,
         "pending_reward": 0.0,
@@ -97,42 +94,17 @@ def generate_bangladeshi_credentials():
   return full_name, password, secret_2fa
 
 
-def get_totp_code(secret_key):
-  try:
-    key = base64.b32decode(
-        secret_key.upper() + "=" * (-len(secret_key) % 8), casefold=True
-    )
-    import time
-
-    counter = struct.pack(">Q", int(time.time() // 30))
-    mac = hmac.new(key, counter, hashlib.sha1).digest()
-    offset = mac[-1] & 0x0F
-    binary = struct.unpack(">I", mac[offset : offset + 4])[0] & 0x7FFFFFFF
-    otp = str(binary % 1000000).zfill(6)
-    return otp
-  except Exception:
-    return "123456"
-
-
 def get_main_menu():
   markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-  btn_work = types.KeyboardButton("🚀 Start Work")
-  btn_balance = types.KeyboardButton("💰 Balance")
-  btn_withdraw = types.KeyboardButton("💸 Withdraw")
-  btn_ref = types.KeyboardButton("👥 Referrals")
-  btn_leaderboard = types.KeyboardButton("🏆 Leaderboard")
-  btn_stats = types.KeyboardButton("📊 Statistics")
-  btn_support = types.KeyboardButton("🎧 Support")
-  btn_help = types.KeyboardButton("❓ Help")
   markup.add(
-      btn_work,
-      btn_balance,
-      btn_withdraw,
-      btn_ref,
-      btn_leaderboard,
-      btn_stats,
-      btn_support,
-      btn_help,
+      types.KeyboardButton("🚀 Start Work"),
+      types.KeyboardButton("💰 Balance"),
+      types.KeyboardButton("💸 Withdraw"),
+      types.KeyboardButton("👥 Referrals"),
+      types.KeyboardButton("🏆 Leaderboard"),
+      types.KeyboardButton("📊 Statistics"),
+      types.KeyboardButton("🎧 Support"),
+      types.KeyboardButton("❓ Help"),
   )
   return markup
 
@@ -195,14 +167,14 @@ def handle_messages(message):
 
   elif text == "💰 Balance":
     u_data["state"] = None
-    bal = u_data["balance"]
-    bot.send_message(chat_id, f"💰 Your Current Balance: ${bal:.2f}")
+    bot.send_message(
+        chat_id, f"💰 Your Current Balance: ${u_data['balance']:.2f}"
+    )
     return
 
   elif text == "💸 Withdraw":
     u_data["state"] = None
-    bal = u_data["balance"]
-    if bal < 0.20:
+    if u_data["balance"] < 0.20:
       bot.send_message(
           chat_id,
           "⚠️ Insufficient balance for withdrawal. Minimum balance must be"
@@ -222,14 +194,13 @@ def handle_messages(message):
 
   elif text == "👥 Referrals":
     u_data["state"] = None
-    ref_count = u_data["referrals"]
-    comm = u_data["commission"]
     ref_link = f"https://t.me/{bot.get_me().username}?start={chat_id}"
     ref_text = (
         "👥 Referral Program\n\nInvite friends and earn a 20% lifetime commission"
         f" on their task earnings!\n\n🔗 Your Referral"
-        f" Link:\n{ref_link}\n\n📊 Total Referrals: {ref_count}\n💰 Total"
-        f" Commission Earned: ${comm:.3f}"
+        f" Link:\n{ref_link}\n\n📊 Total Referrals:"
+        f" {u_data['referrals']}\n💰 Total Commission Earned:"
+        f" ${u_data['commission']:.3f}"
     )
     bot.send_message(chat_id, ref_text)
     return
@@ -271,9 +242,6 @@ def handle_messages(message):
     return
 
   if state == "WAITING_FB_HOTMAIL_DATA":
-    details = text
-    gen_user = u_data.get("gen_user", "N/A")
-    gen_pass = u_data.get("gen_pass", "N/A")
     u_data["state"] = None
     u_data["total_submitted"] += 1
     u_data["review_pending"] += 1
@@ -282,21 +250,19 @@ def handle_messages(message):
     admin_msg = (
         f"🚨 New Facebook Hotmail Task Submission! (Reward:"
         f" ${FB_HOTMAIL_REWARD})\n\n👤 Worker: @{user.username or 'None'}"
-        f" ({chat_id})\n👤 Generated Name: {gen_user}\n🔒 Generated"
-        f" Password: {gen_pass}\n📋 Submitted Hotmail/Outlook"
-        f" Format:\n{details}\n⏳ Report Time Window: 30 Minutes"
+        f" ({chat_id})\n👤 Generated Name: {u_data.get('gen_user', 'N/A')}\n🔒"
+        f" Generated Password: {u_data.get('gen_pass', 'N/A')}\n📋 Submitted"
+        f" Details:\n{text}"
     )
-
     approval_markup = types.InlineKeyboardMarkup(row_width=2)
     approval_markup.add(
         types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{chat_id}"),
         types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{chat_id}"),
     )
-
     try:
       bot.send_message(ADMIN_CHAT_ID, admin_msg, reply_markup=approval_markup)
-    except Exception as e:
-      print(f"Error: {e}")
+    except Exception:
+      pass
 
     bot.send_message(
         chat_id,
@@ -305,107 +271,13 @@ def handle_messages(message):
         reply_markup=get_main_menu(),
     )
 
-  elif state == "WAITING_FB_2FA_UID":
-    u_data["temp_uid"] = text
-    u_data["state"] = "WAITING_FB_2FA_KEY_CONFIRM"
-    bot.send_message(
-        chat_id,
-        "🔑 Please paste your Facebook 2FA Setup Key or confirmation details:",
-        reply_markup=get_cancel_markup(),
-    )
-
-  elif state == "WAITING_FB_2FA_KEY_CONFIRM":
-    uid = u_data.get("temp_uid")
-    key_info = text
-    gen_user = u_data.get("gen_user", "N/A")
-    gen_pass = u_data.get("gen_pass", "N/A")
-    gen_2fa = u_data.get("gen_2fa", "N/A")
-    u_data["state"] = None
-    u_data["total_submitted"] += 1
-    u_data["review_pending"] += 1
-    u_data["pending_reward"] = FB_2FA_REWARD
-
-    admin_msg = (
-        f"🚨 New Facebook 2FA Task Submission! (Reward: ${FB_2FA_REWARD})\n\n👤"
-        f" Worker: @{user.username or 'None'} ({chat_id})\n👤 Generated"
-        f" Name: {gen_user}\n🔒 Generated Password: {gen_pass}\n🛡️ Bot 2FA"
-        f" Secret: {gen_2fa}\n🆔 UID: {uid}\n📋 Details: {key_info}\n⏳ Report"
-        " Time Window: 30 Minutes"
-    )
-
-    approval_markup = types.InlineKeyboardMarkup(row_width=2)
-    approval_markup.add(
-        types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{chat_id}"),
-        types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{chat_id}"),
-    )
-
-    try:
-      bot.send_message(ADMIN_CHAT_ID, admin_msg, reply_markup=approval_markup)
-    except Exception as e:
-      print(f"Error: {e}")
-
-    bot.send_message(
-        chat_id,
-        "✅ Facebook 2FA Account Submitted Successfully!\n⏳ An admin will review"
-        " it within 30 minutes.",
-        reply_markup=get_main_menu(),
-    )
-
-  elif state == "WAITING_FB_COOKIES_UID":
-    u_data["temp_uid"] = text
-    u_data["state"] = "WAITING_FB_COOKIES_DATA"
-    bot.send_message(
-        chat_id,
-        "🍪 Please paste your Facebook Cookies (JSON string):",
-        reply_markup=get_cancel_markup(),
-    )
-
-  elif state == "WAITING_FB_COOKIES_DATA":
-    uid = u_data.get("temp_uid")
-    cookies = text
-    gen_user = u_data.get("gen_user", "N/A")
-    gen_pass = u_data.get("gen_pass", "N/A")
-    u_data["state"] = None
-    u_data["total_submitted"] += 1
-    u_data["review_pending"] += 1
-    u_data["pending_reward"] = FB_COOKIES_REWARD
-
-    admin_msg = (
-        f"🚨 New Facebook Cookies Task Submission! (Reward:"
-        f" ${FB_COOKIES_REWARD})\n\n👤 Worker: @{user.username or 'None'}"
-        f" ({chat_id})\n👤 Generated Name: {gen_user}\n🔒 Generated"
-        f" Password: {gen_pass}\n🆔 UID: {uid}\n🍪 Cookies: {cookies}\n⏳ Report"
-        " Time Window: 30 Minutes"
-    )
-
-    approval_markup = types.InlineKeyboardMarkup(row_width=2)
-    approval_markup.add(
-        types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{chat_id}"),
-        types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{chat_id}"),
-    )
-
-    try:
-      bot.send_message(ADMIN_CHAT_ID, admin_msg, reply_markup=approval_markup)
-    except Exception as e:
-      print(f"Error: {e}")
-
-    bot.send_message(
-        chat_id,
-        "✅ Facebook Cookies Submitted Successfully!\n⏳ An admin will review it"
-        " within 30 minutes.",
-        reply_markup=get_main_menu(),
-    )
-
   elif state == "WAITING_WITHDRAW_DETAILS":
     method = u_data.get("withdraw_method")
-    details = text
     u_data["state"] = None
-
     admin_msg = (
         f"💸 New Withdrawal Request!\n\n👤 User: @{user.username or 'None'}"
-        f" ({chat_id})\n💳 Method: {method}\n📋 Details: {details}"
+        f" ({chat_id})\n💳 Method: {method}\n📋 Details: {text}"
     )
-
     approval_markup = types.InlineKeyboardMarkup(row_width=2)
     approval_markup.add(
         types.InlineKeyboardButton(
@@ -415,11 +287,10 @@ def handle_messages(message):
             "❌ Reject Payout", callback_data=f"wd_rej_{chat_id}"
         ),
     )
-
     try:
       bot.send_message(ADMIN_CHAT_ID, admin_msg, reply_markup=approval_markup)
-    except Exception as e:
-      print(f"Error: {e}")
+    except Exception:
+      pass
 
     bot.send_message(
         chat_id,
@@ -433,6 +304,7 @@ def handle_messages(message):
 def handle_callback(call):
   chat_id = call.message.chat.id
   data = call.data
+  u_data = get_user(chat_id)
 
   if data.startswith("app_"):
     target_user = int(data.split("_")[1])
@@ -444,20 +316,15 @@ def handle_callback(call):
     if target_u_data["review_pending"] > 0:
       target_u_data["review_pending"] -= 1
     target_u_data["pending_reward"] = 0.0
-
     try:
       bot.send_message(
           target_user,
-          f"🎉 Your submitted task has been approved by the admin! Your reward"
-          f" of ${reward:.2f} has been added to your balance.",
+          f"🎉 Your task has been approved! Reward of ${reward:.2f} added to your"
+          " balance.",
       )
-    except Exception:
-      pass
-
-    try:
       bot.edit_message_text(
           call.message.text + "\n\n✅ STATUS: APPROVED BY ADMIN",
-          call.message.chat.id,
+          chat_id,
           call.message.message_id,
       )
     except Exception:
@@ -472,83 +339,25 @@ def handle_callback(call):
     if target_u_data["review_pending"] > 0:
       target_u_data["review_pending"] -= 1
     target_u_data["pending_reward"] = 0.0
-
     try:
       bot.send_message(
-          target_user,
-          "❌ Your submitted task was rejected by the admin. Please try again"
-          " correctly.",
+          target_user, "❌ Your submitted task was rejected by the admin."
       )
-    except Exception:
-      pass
-
-    try:
       bot.edit_message_text(
           call.message.text + "\n\n❌ STATUS: REJECTED BY ADMIN",
-          call.message.chat.id,
+          chat_id,
           call.message.message_id,
       )
     except Exception:
       pass
     return
 
-  elif data.startswith("wd_app_"):
-    target_user = int(data.split("_")[2])
-    bot.answer_callback_query(call.id, "Payout Approved!")
-    try:
-      bot.edit_message_text(
-          call.message.text + "\n\n✅ STATUS: PAYOUT APPROVED",
-          call.message.chat.id,
-          call.message.message_id,
-      )
-      bot.send_message(
-          target_user,
-          "🎉 Your withdrawal request has been approved and paid by the admin!",
-      )
-    except Exception:
-      pass
-    return
-
-  elif data.startswith("wd_rej_"):
-    target_user = int(data.split("_")[2])
-    bot.answer_callback_query(call.id, "Payout Rejected!")
-    try:
-      bot.edit_message_text(
-          call.message.text + "\n\n❌ STATUS: PAYOUT REJECTED",
-          call.message.chat.id,
-          call.message.message_id,
-      )
-      bot.send_message(
-          target_user, "❌ Your withdrawal request was rejected by the admin."
-      )
-    except Exception:
-      pass
-    return
-
-  u_data = get_user(chat_id)
-
-  if data == "task_facebook":
+  elif data == "task_facebook":
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(
         types.InlineKeyboardButton(
             f"🔥 Facebook Hotmail (${FB_HOTMAIL_REWARD}) [ON]",
             callback_data="fb_task_hotmail_info",
-        ),
-        types.InlineKeyboardButton(
-            f"📘 Fb 2FA (0 Friend) (${FB_2FA_REWARD}) [ON]",
-            callback_data="fb_task_2fa_info",
-        ),
-        types.InlineKeyboardButton(
-            f"🍪 Fb Cookies (${FB_COOKIES_REWARD}) [ON]",
-            callback_data="fb_task_cookies_info",
-        ),
-        types.InlineKeyboardButton(
-            f"📧 Create FB with Gmail (${FB_GMAIL_REWARD}) [OFF]",
-            callback_data="task_off_alert",
-        ),
-        types.InlineKeyboardButton(
-            f"🍪 Cookies (30 Friends) (${FB_COOKIES_30F_REWARD}) [OFF]",
-            callback_data="task_off_alert",
         ),
         types.InlineKeyboardButton("🔙 Back", callback_data="back_to_main"),
     )
@@ -558,11 +367,13 @@ def handle_callback(call):
         call.message.message_id,
         reply_markup=markup,
     )
+    return
 
   elif data == "task_off_alert":
     bot.answer_callback_query(
         call.id, "⚠️ This task is currently turned off by admin!", show_alert=True
     )
+    return
 
   elif data == "back_to_main":
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -583,6 +394,7 @@ def handle_callback(call):
         call.message.message_id,
         reply_markup=markup,
     )
+    return
 
   elif data == "fb_task_hotmail_info":
     uname, upass, _ = generate_bangladeshi_credentials()
@@ -592,119 +404,29 @@ def handle_callback(call):
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(
         types.InlineKeyboardButton(
-            "▶️ Start", callback_data="fb_task_hotmail_start"
+            "▶️ Start Task", callback_data="fb_task_hotmail_start"
         ),
         types.InlineKeyboardButton("◀️ Back", callback_data="task_facebook"),
-        types.InlineKeyboardButton("❌ Cancel", callback_data="back_to_main"),
     )
 
     info_text = (
-        "⏱️ Processing Time: 6-12 Hours\n\n📌 Task: Facebook Hotmail (Cookies"
-        f" Only)\n\n📖 Instructions:\n1. Create a Facebook account using these"
-        f" details along with your own Hotmail/Outlook account.\n2. Do NOT"
-        f" enable 2FA.\n3. Click Start to submit details.\n\n👤 Name:"
-        f" {uname}\n🔑 Password: {upass}"
+        "📌 Task: Facebook Hotmail\n\n1. Create a Facebook account using these"
+        f" details.\n\n👤 Name: {uname}\n🔑 Password: {upass}"
     )
     bot.edit_message_text(
-        info_text,
-        chat_id,
-        call.message.message_id,
-        parse_mode="Markdown",
-        reply_markup=markup,
+        info_text, chat_id, call.message.message_id, reply_markup=markup
     )
+    return
 
   elif data == "fb_task_hotmail_start":
     u_data["state"] = "WAITING_FB_HOTMAIL_DATA"
-    prompt_text = (
-        "📥 Please submit your Outlook/Hotmail format:\n\n"
-        "`email|password|token|client_id|proxy`\n\n"
-        "Paste the complete string below:"
-    )
     bot.send_message(
-        chat_id, prompt_text, parse_mode="Markdown", reply_markup=get_cancel_markup()
-    )
-
-  elif data == "fb_task_2fa_info":
-    uname, upass, secret_2fa = generate_bangladeshi_credentials()
-    u_data["gen_user"] = uname
-    u_data["gen_pass"] = upass
-    u_data["gen_2fa"] = secret_2fa
-
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(
-        types.InlineKeyboardButton(
-            "📱 Get Code (2FA OTP)", callback_data="fb_task_get_code"
-        ),
-        types.InlineKeyboardButton(
-            "▶️ Start Task", callback_data="fb_task_2fa_start"
-        ),
-        types.InlineKeyboardButton("◀️ Back", callback_data="task_facebook"),
-        types.InlineKeyboardButton("❌ Cancel", callback_data="back_to_main"),
-    )
-
-    info_text = (
-        "⏱️ Processing Time: 6-12 Hours\n\n📌 Task: Facebook 2FA (0"
-        " Friend)\n\n📖 Instructions:\n1. Create a Facebook account using these"
-        f" details.\n2. Enable 2FA using secret key below.\n\n👤 Name:"
-        f" {uname}\n🔑 Password: {upass}\n🛡️ 2FA Secret Key: `{secret_2fa}`"
-    )
-    bot.edit_message_text(
-        info_text,
         chat_id,
-        call.message.message_id,
+        "📥 Please submit your Outlook/Hotmail format:\n`email|password`",
         parse_mode="Markdown",
-        reply_markup=markup,
-    )
-
-  elif data == "fb_task_get_code":
-    secret_2fa = u_data.get("gen_2fa", "JBSWY3DPEHPK3PXP")
-    current_otp = get_totp_code(secret_2fa)
-    bot.answer_callback_query(
-        call.id, f"🔑 Current 2FA Code: {current_otp}", show_alert=True
-    )
-
-  elif data == "fb_task_2fa_start":
-    u_data["state"] = "WAITING_FB_2FA_UID"
-    bot.send_message(
-        chat_id,
-        "🆔 Please provide your Facebook UID:",
         reply_markup=get_cancel_markup(),
     )
-
-  elif data == "fb_task_cookies_info":
-    uname, upass, _ = generate_bangladeshi_credentials()
-    u_data["gen_user"] = uname
-    u_data["gen_pass"] = upass
-
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(
-        types.InlineKeyboardButton(
-            "▶️ Start Task", callback_data="fb_task_cookies_start"
-        ),
-        types.InlineKeyboardButton("◀️ Back", callback_data="task_facebook"),
-        types.InlineKeyboardButton("❌ Cancel", callback_data="back_to_main"),
-    )
-
-    info_text = (
-        "⏱️ Processing Time: 6-12 Hours\n\n📌 Task: Facebook Cookies\n\n📖"
-        f" Instructions:\n1. Create FB account.\n2. Extract cookies.\n3. Click"
-        f" Start Task.\n\n👤 Name: {uname}\n🔑 Password: {upass}"
-    )
-    bot.edit_message_text(
-        info_text,
-        chat_id,
-        call.message.message_id,
-        parse_mode="Markdown",
-        reply_markup=markup,
-    )
-
-  elif data == "fb_task_cookies_start":
-    u_data["state"] = "WAITING_FB_COOKIES_UID"
-    bot.send_message(
-        chat_id,
-        "🆔 Please provide your Facebook UID:",
-        reply_markup=get_cancel_markup(),
-    )
+    return
 
   elif data in ["wd_bkash", "wd_binance", "wd_bep20"]:
     method = data.replace("wd_", "").upper()
@@ -712,10 +434,11 @@ def handle_callback(call):
     u_data["state"] = "WAITING_WITHDRAW_DETAILS"
     bot.send_message(
         chat_id,
-        f"✅ You selected {method}.\n📱 Please send your payout account details"
-        " (Number or Wallet Address):",
+        f"✅ You selected {method}.\n📱 Please send your payout account"
+        " details:",
         reply_markup=get_cancel_markup(),
     )
+    return
 
 
 if __name__ == "__main__":
@@ -725,4 +448,3 @@ if __name__ == "__main__":
   except Exception:
     pass
   bot.infinity_polling(skip_pending=True)
-
