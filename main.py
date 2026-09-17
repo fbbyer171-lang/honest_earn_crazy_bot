@@ -16,7 +16,6 @@ HELP_USERNAME = "@timotyservice"
 
 # Task Rewards Configuration
 FB_HOTMAIL_REWARD = 0.08
-FB_2FA_REWARD = 0.06
 FB_COOKIES_REWARD = 0.07
 HOTMAIL_10_PAGE_REWARD = 0.40
 
@@ -78,8 +77,9 @@ def get_user(chat_id):
         "pending_reward": 0.0,
         "gen_user": None,
         "gen_pass": None,
-        "gen_2fa": None,
         "temp_uid": None,
+        "temp_2fa": None,
+        "temp_cookies": None,
         "withdraw_method": None,
     }
   return user_data[chat_id]
@@ -92,26 +92,7 @@ def generate_bangladeshi_credentials():
   letters = string.ascii_letters + string.digits
   rand_pass = "".join(random.choice(letters) for i in range(8))
   password = f"Pass_{rand_pass}"
-  base32_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-  secret_2fa = "".join(random.choice(base32_chars) for _ in range(16))
-  return full_name, password, secret_2fa
-
-
-def get_totp_code(secret_key):
-  try:
-    key = base64.b32decode(
-        secret_key.upper() + "=" * (-len(secret_key) % 8), casefold=True
-    )
-    import time
-
-    counter = struct.pack(">Q", int(time.time() // 30))
-    mac = hmac.new(key, counter, hashlib.sha1).digest()
-    offset = mac[-1] & 0x0F
-    binary = struct.unpack(">I", mac[offset : offset + 4])[0] & 0x7FFFFFFF
-    otp = str(binary % 1000000).zfill(6)
-    return otp
-  except Exception:
-    return "123456"
+  return full_name, password
 
 
 def get_main_menu():
@@ -261,40 +242,50 @@ def handle_messages(message):
     )
     return
 
-  # Task States Management
-  if state == "WAITING_FB_HOTMAIL_DATA":
+  # Hotmail First Task Step-by-Step States (UID -> 2FA -> Cookies -> Full Token)
+  elif state == "WAITING_FB_HOTMAIL_UID":
+    u_data["temp_uid"] = text
+    u_data["state"] = "WAITING_FB_HOTMAIL_2FA"
+    bot.send_message(
+        chat_id,
+        "🔐 Please send your Facebook 2FA Secret/Code:",
+        reply_markup=get_cancel_markup(),
+    )
+
+  elif state == "WAITING_FB_HOTMAIL_2FA":
+    u_data["temp_2fa"] = text
+    u_data["state"] = "WAITING_FB_HOTMAIL_COOKIES"
+    bot.send_message(
+        chat_id,
+        "🍪 Please send your Facebook Cookies:",
+        reply_markup=get_cancel_markup(),
+    )
+
+  elif state == "WAITING_FB_HOTMAIL_COOKIES":
+    u_data["temp_cookies"] = text
+    u_data["state"] = "WAITING_FB_HOTMAIL_FULL_TOKEN"
+    bot.send_message(
+        chat_id,
+        "📥 Please send your Hotmail Full Token / Details:",
+        reply_markup=get_cancel_markup(),
+    )
+
+  elif state == "WAITING_FB_HOTMAIL_FULL_TOKEN":
+    uid = u_data.get("temp_uid")
+    two_fa = u_data.get("temp_2fa")
+    cookies = u_data.get("temp_cookies")
+    full_token = text
     u_data["state"] = None
     u_data["total_submitted"] += 1
     u_data["review_pending"] += 1
     u_data["pending_reward"] = FB_HOTMAIL_REWARD
-    admin_msg = (
-        f"🚨 New FB Hotmail Task (${FB_HOTMAIL_REWARD})\n\n👤 Worker: @{user.username or 'None'}"
-        f" ({chat_id})\n👤 Name: {u_data.get('gen_user')}\n🔑 Password:"
-        f" {u_data.get('gen_pass')}\n📋 Details:\n{text}"
-    )
-    send_admin_submission(admin_msg, chat_id)
 
-  elif state == "WAITING_FB_2FA_UID":
-    u_data["temp_uid"] = text
-    u_data["state"] = "WAITING_FB_2FA_CODE_FINAL"
-    bot.send_message(
-        chat_id,
-        "🔑 Please send your 2FA Code or submission details:",
-        reply_markup=get_cancel_markup(),
-    )
-
-  elif state == "WAITING_FB_2FA_CODE_FINAL":
-    uid = u_data.get("temp_uid")
-    u_data["state"] = None
-    u_data["total_submitted"] += 1
-    u_data["review_pending"] += 1
-    u_data["pending_reward"] = FB_2FA_REWARD
     admin_msg = (
-        f"🚨 New FB 2FA Task Submission! (${FB_2FA_REWARD})\n\n👤 Worker:"
+        f"🚨 New FB Hotmail Task (${FB_HOTMAIL_REWARD})\n\n👤 Worker:"
         f" @{user.username or 'None'} ({chat_id})\n👤 Name:"
-        f" {u_data.get('gen_user')}\n🔒 Password: {u_data.get('gen_pass')}\n🛡️"
-        f" 2FA Secret: {u_data.get('gen_2fa')}\n🆔 UID: {uid}\n📋 Details:"
-        f" {text}"
+        f" {u_data.get('gen_user')}\n🔑 Password: {u_data.get('gen_pass')}\n🆔"
+        f" UID: {uid}\n🔐 2FA: {two_fa}\n🍪 Cookies: {cookies}\n📥 Hotmail Full"
+        f" Token:\n{full_token}"
     )
     send_admin_submission(admin_msg, chat_id)
 
@@ -321,16 +312,39 @@ def handle_messages(message):
     )
     send_admin_submission(admin_msg, chat_id)
 
-  elif state == "WAITING_HOTMAIL_10_PAGE_DATA":
+  # Hotmail 10 Page Step-by-Step States
+  elif state == "WAITING_HOTMAIL_10_UID":
+    u_data["temp_uid"] = text
+    u_data["state"] = "WAITING_HOTMAIL_10_COOKIES"
+    bot.send_message(
+        chat_id,
+        "🍪 Please send your Facebook Cookies:",
+        reply_markup=get_cancel_markup(),
+    )
+
+  elif state == "WAITING_HOTMAIL_10_COOKIES":
+    u_data["temp_cookies"] = text
+    u_data["state"] = "WAITING_HOTMAIL_10_FULL_TOKEN"
+    bot.send_message(
+        chat_id,
+        "📥 Please send your Hotmail Full Token / Details:",
+        reply_markup=get_cancel_markup(),
+    )
+
+  elif state == "WAITING_HOTMAIL_10_FULL_TOKEN":
+    uid = u_data.get("temp_uid")
+    cookies = u_data.get("temp_cookies")
+    full_token = text
     u_data["state"] = None
     u_data["total_submitted"] += 1
     u_data["review_pending"] += 1
     u_data["pending_reward"] = HOTMAIL_10_PAGE_REWARD
+
     admin_msg = (
         f"🚨 New Hotmail 10 Page Task (${HOTMAIL_10_PAGE_REWARD})\n\n👤 Worker:"
         f" @{user.username or 'None'} ({chat_id})\n👤 Name:"
-        f" {u_data.get('gen_user')}\n🔑 Password: {u_data.get('gen_pass')}\n📋"
-        f" Details:\n{text}"
+        f" {u_data.get('gen_user')}\n🔑 Password: {u_data.get('gen_pass')}\n🆔"
+        f" UID: {uid}\n🍪 Cookies: {cookies}\n📥 Full Token:\n{full_token}"
     )
     send_admin_submission(admin_msg, chat_id)
 
@@ -439,10 +453,6 @@ def handle_callback(call):
             callback_data="fb_task_hotmail_info",
         ),
         types.InlineKeyboardButton(
-            f"📘 Fb 2FA (${FB_2FA_REWARD}) [ON]",
-            callback_data="fb_task_2fa_info",
-        ),
-        types.InlineKeyboardButton(
             f"🍪 Fb Cookies (${FB_COOKIES_REWARD}) [ON]",
             callback_data="fb_task_cookies_info",
         ),
@@ -488,7 +498,7 @@ def handle_callback(call):
     return
 
   elif data == "fb_task_hotmail_info":
-    uname, upass, _ = generate_bangladeshi_credentials()
+    uname, upass = generate_bangladeshi_credentials()
     u_data["gen_user"] = uname
     u_data["gen_pass"] = upass
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -508,62 +518,16 @@ def handle_callback(call):
     return
 
   elif data == "fb_task_hotmail_start":
-    u_data["state"] = "WAITING_FB_HOTMAIL_DATA"
+    u_data["state"] = "WAITING_FB_HOTMAIL_UID"
     bot.send_message(
         chat_id,
-        "📥 Please submit your Outlook/Hotmail format:\n`email|password`",
-        parse_mode="Markdown",
-        reply_markup=get_cancel_markup(),
-    )
-    return
-
-  elif data == "fb_task_2fa_info":
-    uname, upass, secret_2fa = generate_bangladeshi_credentials()
-    u_data["gen_user"] = uname
-    u_data["gen_pass"] = upass
-    u_data["gen_2fa"] = secret_2fa
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(
-        types.InlineKeyboardButton(
-            "📱 Get Code (OTP)", callback_data="fb_task_get_code"
-        ),
-        types.InlineKeyboardButton(
-            "▶️ Start Task", callback_data="fb_task_2fa_start"
-        ),
-        types.InlineKeyboardButton("◀️ Back", callback_data="task_facebook"),
-    )
-    info_text = (
-        "📌 Task: Facebook 2FA\n\n1. Create FB account & setup 2FA.\n\n👤 Name:"
-        f" {uname}\n🔑 Password: {upass}\n🛡️ 2FA Secret: `{secret_2fa}`"
-    )
-    bot.edit_message_text(
-        info_text,
-        chat_id,
-        call.message.message_id,
-        parse_mode="Markdown",
-        reply_markup=markup,
-    )
-    return
-
-  elif data == "fb_task_get_code":
-    secret_2fa = u_data.get("gen_2fa", "JBSWY3DPEHPK3PXP")
-    current_otp = get_totp_code(secret_2fa)
-    bot.answer_callback_query(
-        call.id, f"🔑 Current 2FA Code: {current_otp}", show_alert=True
-    )
-    return
-
-  elif data == "fb_task_2fa_start":
-    u_data["state"] = "WAITING_FB_2FA_UID"
-    bot.send_message(
-        chat_id,
-        "🆔 Please provide your Facebook UID first:",
+        "🆔 Please send your Facebook UID first:",
         reply_markup=get_cancel_markup(),
     )
     return
 
   elif data == "fb_task_cookies_info":
-    uname, upass, _ = generate_bangladeshi_credentials()
+    uname, upass = generate_bangladeshi_credentials()
     u_data["gen_user"] = uname
     u_data["gen_pass"] = upass
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -592,7 +556,7 @@ def handle_callback(call):
     return
 
   elif data == "fb_task_hotmail_10_page_info":
-    uname, upass, _ = generate_bangladeshi_credentials()
+    uname, upass = generate_bangladeshi_credentials()
     u_data["gen_user"] = uname
     u_data["gen_pass"] = upass
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -612,10 +576,10 @@ def handle_callback(call):
     return
 
   elif data == "fb_task_hotmail_10_page_start":
-    u_data["state"] = "WAITING_HOTMAIL_10_PAGE_DATA"
+    u_data["state"] = "WAITING_HOTMAIL_10_UID"
     bot.send_message(
         chat_id,
-        "📥 Please submit your Hotmail 10 Page details / format:",
+        "🆔 Please send your Facebook UID first:",
         reply_markup=get_cancel_markup(),
     )
     return
@@ -640,4 +604,3 @@ if __name__ == "__main__":
   except Exception:
     pass
   bot.infinity_polling(skip_pending=True)
-   
